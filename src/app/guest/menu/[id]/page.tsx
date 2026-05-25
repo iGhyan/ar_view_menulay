@@ -15,8 +15,9 @@ const TAG_STYLES: Record<string, string> = {
   chef:    'bg-amber-500/10 border border-amber-500/20 text-amber-400',
 };
 
-const TENANT_ID     = process.env.NEXT_PUBLIC_TENANT_ID_KDS     ?? 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? 'eea190fd-b8dd-470d-aff1-7d75be5c2efb';
+// ── Correct IDs from env ───────────────────────────────────────────────────────
+const TENANT_ID     = process.env.NEXT_PUBLIC_TENANT_ID     ?? 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID ?? 'eea190fd-b8dd-470d-aff1-7d75be5c2efb';
 
 export default function ItemDetailPage() {
   const { id }  = useParams<{ id: string }>();
@@ -40,10 +41,7 @@ export default function ItemDetailPage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    const menuRid = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID
-      || process.env.NEXT_PUBLIC_RESTAURANT_ID
-      || '2687382e-3b00-4f57-9014-f484df89e3fe';
-    fetchMenuItem(id, menuRid)
+    fetchMenuItem(id, RESTAURANT_ID)
       .then(raw => {
         setRawItem(raw);
         const normalised = normaliseItem(raw);
@@ -63,14 +61,24 @@ export default function ItemDetailPage() {
     try {
       const tableId = (typeof window !== 'undefined' ? sessionStorage.getItem('lm_tid') : null) ?? 'table-01';
       const payload = {
-        tenantId: TENANT_ID, restaurantId: RESTAURANT_ID, tableId,
-        currencyCode: 'PKR',
+        tenantId:              TENANT_ID,
+        restaurantId:          RESTAURANT_ID,
+        tableId,
+        currencyCode:          'PKR',
         totalAmountMinorUnits: Math.round(item.price * qty * 100),
-        lineItems: [{ itemId: item.id, name: item.name, quantity: qty,
-          unitPriceMinorUnits: Math.round(item.price * 100),
-          totalPriceMinorUnits: Math.round(item.price * qty * 100) }],
+        lineItems: [{
+          itemId:               item.id,
+          name:                 item.name,
+          quantity:             qty,
+          unitPriceMinorUnits:  Math.round(item.price * 100),
+          totalPriceMinorUnits: Math.round(item.price * qty * 100),
+        }],
       };
-      const res  = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res  = await fetch('/api/orders', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? data?.message ?? `Error ${res.status}`);
       setOrderId(data.orderId ?? '');
@@ -147,9 +155,8 @@ export default function ItemDetailPage() {
     </main>
   );
 
-  const rid        = process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
   const arModelUrl = rawItem?.arModelUrl ?? '';
-  const arHref     = `/guest/ar?rid=${encodeURIComponent(rid)}&iid=${encodeURIComponent(id)}&name=${encodeURIComponent(item.name)}&emoji=${encodeURIComponent(item.emoji ?? '🍽️')}${arModelUrl ? '&url=' + encodeURIComponent(arModelUrl) : ''}`;
+  const arHref     = `/guest/ar?rid=${encodeURIComponent(RESTAURANT_ID)}&iid=${encodeURIComponent(id)}&name=${encodeURIComponent(item.name)}&emoji=${encodeURIComponent(item.emoji ?? '🍽️')}${arModelUrl ? '&url=' + encodeURIComponent(arModelUrl) : ''}`;
 
   return (
     <main className="min-h-dvh bg-gray-950 flex flex-col items-center">
@@ -157,7 +164,12 @@ export default function ItemDetailPage() {
 
         {/* ── Hero ── */}
         <div className="relative w-full h-[210px] flex items-center justify-center text-[88px] bg-gradient-to-br from-orange-500/10 to-gray-900">
-          <span className="drop-shadow-lg">{item.emoji}</span>
+          {(rawItem?.imageUrl) ? (
+            <img src={rawItem.imageUrl} alt={item.name}
+              className="absolute inset-0 w-full h-full object-cover opacity-40" />
+          ) : (
+            <span className="drop-shadow-lg">{item.emoji}</span>
+          )}
 
           <button onClick={() => router.back()}
             className="absolute top-3 left-4 w-9 h-9 rounded-xl bg-gray-950/80 backdrop-blur border border-white/10 flex items-center justify-center hover:bg-gray-900 transition-all">
@@ -200,7 +212,7 @@ export default function ItemDetailPage() {
 
         <div className="flex-1 overflow-y-auto">
 
-          {/* ── Item header ── */}
+          {/* Item header */}
           <div className="px-5 pt-4 pb-4 border-b border-white/[0.06]">
             <h1 className="text-[24px] font-bold text-white mb-1 tracking-tight">{item.name}</h1>
             {item.subtitle && <p className="italic text-[13px] text-orange-400/70 mb-3">{item.subtitle}</p>}
@@ -224,7 +236,7 @@ export default function ItemDetailPage() {
             </div>
           </div>
 
-          {/* ── AR banner ── */}
+          {/* AR banner */}
           {arReady === true && (
             <Link href={arHref}
               className="mx-5 mt-4 flex items-center gap-3 p-3.5 rounded-2xl bg-orange-500/10 border border-orange-500/20 hover:border-orange-500/35 transition-all">
@@ -239,14 +251,14 @@ export default function ItemDetailPage() {
             </Link>
           )}
 
-          {/* ── Macros ── */}
+          {/* Macros */}
           {(item.calories || item.protein || item.fat || item.carbs) ? (
             <div className="flex gap-2 px-5 py-4 border-b border-white/[0.06] mt-2">
               {[
-                { val: item.calories,        label: 'Cal'     },
-                { val: `${item.protein}g`,   label: 'Protein' },
-                { val: `${item.fat}g`,       label: 'Fat'     },
-                { val: `${item.carbs}g`,     label: 'Carbs'   },
+                { val: item.calories,      label: 'Cal'     },
+                { val: `${item.protein}g`, label: 'Protein' },
+                { val: `${item.fat}g`,     label: 'Fat'     },
+                { val: `${item.carbs}g`,   label: 'Carbs'   },
               ].map(m => (
                 <div key={m.label} className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-2.5 flex flex-col items-center gap-0.5">
                   <span className="text-[15px] font-bold text-white/70">{m.val ?? '—'}</span>
@@ -256,7 +268,7 @@ export default function ItemDetailPage() {
             </div>
           ) : null}
 
-          {/* ── Description ── */}
+          {/* Description */}
           {item.description && (
             <div className="px-5 py-4 border-b border-white/[0.06]">
               <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2">Description</p>
@@ -264,7 +276,7 @@ export default function ItemDetailPage() {
             </div>
           )}
 
-          {/* ── Allergens ── */}
+          {/* Allergens */}
           {(item.allergens ?? []).length > 0 && (
             <div className="px-5 py-4 border-b border-white/[0.06]">
               <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2">Allergen Information</p>
@@ -287,7 +299,7 @@ export default function ItemDetailPage() {
             </div>
           )}
 
-          {/* ── Customisations ── */}
+          {/* Customisations */}
           {item.customisations && (
             <div className="px-5 py-4 border-b border-white/[0.06]">
               <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-3">Customise Your Order</p>
@@ -315,7 +327,7 @@ export default function ItemDetailPage() {
             </div>
           )}
 
-          {/* ── Quantity ── */}
+          {/* Quantity */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
             <div>
               <p className="text-[13px] font-semibold text-white/60">Quantity</p>
@@ -346,7 +358,7 @@ export default function ItemDetailPage() {
           <div className="h-4" />
         </div>
 
-        {/* ── Footer CTA ── */}
+        {/* Footer CTA */}
         <div className="p-4 flex items-center gap-3 bg-gray-900/80 backdrop-blur-sm border-t border-white/[0.06]">
           <div>
             <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold">Total</p>
