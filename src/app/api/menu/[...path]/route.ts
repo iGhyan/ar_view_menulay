@@ -1,16 +1,16 @@
-// src/app/api/menu/[...path]/route.ts
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 
-const AWS_MENU_BASE = process.env.NEXT_PUBLIC_API_BASE
+export const maxDuration = 30
+
+const AWS_BASE  = process.env.NEXT_PUBLIC_API_BASE
   ?? 'https://g1ou0w5x4m.execute-api.ap-south-1.amazonaws.com/dev'
 
-const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID ?? 'tenant-burger-house-001'
+const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID
+  ?? 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
 
-function getJwtClaim(token: string, claim: string): string | null {
+function getJwtClaim(t: string, c: string): string | null {
   try {
-    const payload = token.split('.')[1]
-    const decoded = Buffer.from(payload, 'base64url').toString('utf-8')
-    return JSON.parse(decoded)[claim] ?? null
+    return JSON.parse(Buffer.from(t.split('.')[1], 'base64url').toString())[c] ?? null
   } catch { return null }
 }
 
@@ -20,55 +20,42 @@ async function handler(
 ) {
   const { path } = await params
   const qs       = req.nextUrl.searchParams.toString()
-  const upstream = `${AWS_MENU_BASE}/menus/${path.join('/')}${qs ? `?${qs}` : ''}`
+  const upstream = `${AWS_BASE}/menus/${path.join('/')}${qs ? `?${qs}` : ''}`
   const ct       = req.headers.get('content-type') ?? ''
   const auth     = req.headers.get('authorization') ?? ''
 
-  const tenantId = auth
-    ? (getJwtClaim(auth, 'custom:tenant_id') ?? TENANT_ID)
-    : TENANT_ID
+  // Always use env TENANT_ID — ignore JWT tenant (guest menu is public)
+  const tenantId = TENANT_ID
 
-  // Only set headers we control — let fetch handle Content-Type for multipart
-  const forwardHeaders: HeadersInit = {
+  console.log(`[menu-proxy] ${req.method} ${upstream} | tenant:${tenantId} | ct:${ct.slice(0,30)}`)
+
+  const hdrs: HeadersInit = {
     'X-Tenant-Id': tenantId,
-    ...(auth ? { 'Authorization': auth } : {}),
-    // Forward Content-Type for JSON; for multipart let the Request carry its own
+    ...(auth ? { Authorization: auth } : {}),
     ...(!ct.includes('multipart') ? { 'Content-Type': ct || 'application/json' } : {}),
   }
 
   let body: BodyInit | undefined
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-    if (ct.includes('multipart/form-data')) {
-      // Pass FormData through directly — preserves boundary and all fields
-      body = await req.formData()
-    } else {
-      body = await req.text()
-    }
+    body = ct.includes('multipart') ? await req.formData() : await req.text()
   }
 
-  console.log(`[menu-proxy] ${req.method} ${upstream} | tenant:${tenantId} | ct:${ct.slice(0,30)}`)
-
   try {
-    const res  = await fetch(upstream, {
-      method:  req.method,
-      headers: forwardHeaders,
-      body,
-    })
+    const res  = await fetch(upstream, { method: req.method, headers: hdrs, body })
     const text = await res.text()
-    console.log(`[menu-proxy] → ${res.status}: ${text.slice(0, 100)}`)
+    console.log('[proxy] ->', res.status, text.slice(0, 100))
     return new NextResponse(text, {
       status:  res.status,
       headers: { 'Content-Type': res.headers.get('content-type') ?? 'application/json' },
     })
-  } catch (err: any) {
-    console.error('[menu-proxy] error:', err?.message)
-    return NextResponse.json({ error: 'Proxy error', message: err?.message }, { status: 502 })
+  } catch (e: any) {
+    return NextResponse.json({ error: 'Proxy error', message: e?.message }, { status: 502 })
   }
 }
 
-export const GET    = handler
-export const POST   = handler
-export const PUT    = handler
-export const DELETE = handler
-export const PATCH  = handler
+export const GET     = handler
+export const POST    = handler
+export const PUT     = handler
+export const DELETE  = handler
+export const PATCH   = handler
 export const OPTIONS = () => new NextResponse(null, { status: 204 })

@@ -56,7 +56,7 @@ function formatRs(minor?: number) {
   return 'Rs ' + (minor / 100).toLocaleString('en-PK');
 }
 
-const POLL_MS = 10000;
+const POLL_MS = 3000;
 
 export default function TrackingPage() {
   const router = useRouter();
