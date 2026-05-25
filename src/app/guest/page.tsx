@@ -5,14 +5,15 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { MapPin, ShoppingCart, Leaf, Loader2 } from 'lucide-react';
 
-const MENU_RID  = process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
+// ── Correct IDs from env ───────────────────────────────────────────────────────
+const MENU_RID  = process.env.NEXT_PUBLIC_RESTAURANT_ID || 'eea190fd-b8dd-470d-aff1-7d75be5c2efb';
 const API_BASE  = process.env.NEXT_PUBLIC_API_BASE      || 'https://g1ou0w5x4m.execute-api.ap-south-1.amazonaws.com/dev';
 const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID     || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 function GuestContent() {
-  const params = useSearchParams();
-  const qrRid  = params.get('rid') || '';
-  const tid    = params.get('tid') || '';
+  const params   = useSearchParams();
+  const qrRid    = params.get('rid') || '';
+  const tid      = params.get('tid') || '';
   const tableNum = tid.replace(/^[Tt](?:able[-_]?)?/, '').replace(/\D/g, '') || '—';
 
   const [zone,           setZone]           = useState('Main Hall');
@@ -26,11 +27,14 @@ function GuestContent() {
     else if (n >= 11)        setZone('Private Dining');
     else                     setZone('Main Hall');
 
-    if (qrRid)               sessionStorage.setItem('lm_rid',   qrRid);
-    if (tid)                 sessionStorage.setItem('lm_tid',   tid);
-    if (tableNum !== '—')    sessionStorage.setItem('lm_table', tableNum);
+    if (qrRid)            sessionStorage.setItem('lm_rid',   qrRid);
+    if (tid)              sessionStorage.setItem('lm_tid',   tid);
+    if (tableNum !== '—') sessionStorage.setItem('lm_table', tableNum);
 
-    fetch(`${API_BASE}/menus/restaurants/${MENU_RID}/items`, {
+    // Use qrRid from URL if present, otherwise fall back to env var
+    const ridToUse = qrRid || MENU_RID;
+
+    fetch(`${API_BASE}/menus/restaurants/${ridToUse}/items`, {
       headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': TENANT_ID },
       cache: 'no-store',
     })
@@ -49,22 +53,22 @@ function GuestContent() {
 
   const isQrScan = params.has('rid') && params.has('tid');
 
+  // Build menu URL — use qrRid if present, else MENU_RID
+  const menuUrl = `/guest/menu?rid=${qrRid || MENU_RID}&tid=${tid}`;
+
   return (
     <main className="min-h-dvh bg-gray-950 flex flex-col items-center justify-center overflow-hidden">
 
-      {/* Background glows */}
       <div className="fixed top-0 right-0 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/2" />
       <div className="fixed bottom-0 left-0 w-80 h-80 bg-orange-500/5 rounded-full blur-3xl pointer-events-none translate-y-1/2 -translate-x-1/2" />
 
       <div className="phone-shell animate-fade-up relative">
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="mx-4 mt-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 px-5 py-4 flex items-center justify-between">
           <div>
             <p className="text-orange-400/70 text-[10px] uppercase tracking-widest font-semibold mb-0.5">Now Open</p>
-            <h1 className="text-white text-[24px] font-bold tracking-tight leading-tight">
-              {restaurantName}
-            </h1>
+            <h1 className="text-white text-[24px] font-bold tracking-tight leading-tight">{restaurantName}</h1>
             <p className="text-orange-300/60 text-[13px] italic mt-0.5">{tagline}</p>
           </div>
           <div className="w-14 h-14 bg-orange-500/15 border border-orange-500/25 rounded-2xl flex items-center justify-center text-3xl">
@@ -123,15 +127,12 @@ function GuestContent() {
               </div>
             </div>
           )}
-
         </div>
 
-        {/* ── Footer CTAs ── */}
+        {/* Footer CTAs */}
         <div className="px-5 pb-6 flex flex-col gap-3">
-          <Link
-            href={`/guest/menu?rid=${qrRid}&tid=${tid}`}
-            className="flex items-center justify-center gap-2 h-14 rounded-2xl text-[15px] font-bold bg-orange-500 hover:bg-orange-600 text-white transition-all shadow-lg shadow-orange-500/30 active:scale-[0.98]"
-          >
+          <Link href={menuUrl}
+            className="flex items-center justify-center gap-2 h-14 rounded-2xl text-[15px] font-bold bg-orange-500 hover:bg-orange-600 text-white transition-all shadow-lg shadow-orange-500/30 active:scale-[0.98]">
             <ShoppingCart size={18} />
             Browse Our Menu
           </Link>
@@ -141,7 +142,7 @@ function GuestContent() {
           </button>
         </div>
 
-        {/* ── Bottom nav ── */}
+        {/* Bottom nav */}
         <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.06] bg-gray-900/80 backdrop-blur-sm">
           {[
             { icon: '🏠', label: 'Home',   href: '/guest'          },

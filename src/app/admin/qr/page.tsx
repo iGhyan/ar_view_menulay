@@ -22,8 +22,10 @@ interface QrRecord {
   qrDataUrl?:   string;
 }
 
-const RESTAURANT_ID = '872f6f3a-82f2-41f0-a246-ec008b09666c';
-const DEFAULT_BASE  = 'https://digital-menu-three-olive.vercel.app';
+// ── Correct IDs from env ───────────────────────────────────────────────────────
+const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID ?? 'eea190fd-b8dd-470d-aff1-7d75be5c2efb';
+const DEFAULT_BASE  = process.env.NEXT_PUBLIC_BASE_URL      ?? 'https://ar-menu-lime.vercel.app';
+
 const ZONES = ['All Zones', 'Main Hall', 'Garden Terrace', 'Private Dining'];
 
 type GenState = 'idle' | 'generating' | 'done' | 'error';
@@ -46,9 +48,9 @@ function buildS3Url(s3Key: string): string {
 function makeSeeds(): QrRecord[] {
   const base = typeof window !== 'undefined' ? window.location.origin : DEFAULT_BASE;
   const mainHall = Array.from({ length: 8 }, (_, i) => {
-    const num = String(i + 1).padStart(2, '0');
+    const num     = String(i + 1).padStart(2, '0');
     const tableId = `T${num}`;
-    const s3Key = buildS3Key(RESTAURANT_ID, tableId);
+    const s3Key   = buildS3Key(RESTAURANT_ID, tableId);
     return {
       id: `seed-${tableId}`, restaurantId: RESTAURANT_ID,
       tableId, tableNumber: num, zone: 'Main Hall', outlet: 'Main Hall',
@@ -58,10 +60,10 @@ function makeSeeds(): QrRecord[] {
     };
   });
   const other = Array.from({ length: 4 }, (_, i) => {
-    const num = String(i + 9).padStart(2, '0');
+    const num     = String(i + 9).padStart(2, '0');
     const tableId = `T${num}`;
-    const zone = i < 2 ? 'Garden Terrace' : 'Private Dining';
-    const s3Key = buildS3Key(RESTAURANT_ID, tableId);
+    const zone    = i < 2 ? 'Garden Terrace' : 'Private Dining';
+    const s3Key   = buildS3Key(RESTAURANT_ID, tableId);
     return {
       id: `seed-${tableId}`, restaurantId: RESTAURANT_ID,
       tableId, tableNumber: num, zone, outlet: zone,
@@ -225,10 +227,10 @@ export default function AdminQRPage() {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
           {[
-            { label: 'Total Tables', val: stats.total,     icon: '🪑', color: 'text-white'       },
-            { label: 'Linked',       val: stats.linked,    icon: '🔗', color: 'text-orange-400'  },
-            { label: 'QR Generated', val: stats.generated, icon: '📱', color: 'text-green-400'   },
-            { label: 'Zones',        val: stats.zones,     icon: '🏛️', color: 'text-purple-400'  },
+            { label: 'Total Tables', val: stats.total,     icon: '🪑', color: 'text-white'      },
+            { label: 'Linked',       val: stats.linked,    icon: '🔗', color: 'text-orange-400' },
+            { label: 'QR Generated', val: stats.generated, icon: '📱', color: 'text-green-400'  },
+            { label: 'Zones',        val: stats.zones,     icon: '🏛️', color: 'text-purple-400' },
           ].map(s => (
             <div key={s.label} className="bg-gray-900 border border-white/[0.07] rounded-2xl p-4">
               <span className="text-xl mb-3 block">{s.icon}</span>
@@ -257,8 +259,6 @@ export default function AdminQRPage() {
           {filtered.map(record => (
             <div key={record.id}
               className="bg-gray-900 border border-white/[0.07] rounded-2xl overflow-hidden hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/5 transition-all group">
-
-              {/* QR preview area */}
               <div className="aspect-square flex items-center justify-center bg-white/[0.03] relative overflow-hidden cursor-pointer"
                 onClick={() => openPreview(record)}>
                 {record.qrDataUrl ? (
@@ -291,8 +291,6 @@ export default function AdminQRPage() {
                     {record.linked ? 'Linked' : 'Unlinked'}
                   </span>
                 </div>
-
-                {/* URL copy row */}
                 <div className="flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.06] rounded-xl px-2.5 py-1.5 mb-3 cursor-pointer hover:bg-orange-500/5 hover:border-orange-500/20 transition-all"
                   onClick={() => copyUrl(record)}>
                   <p className="text-[10px] text-white/30 font-mono flex-1 truncate">{record.encodedUrl}</p>
@@ -300,8 +298,6 @@ export default function AdminQRPage() {
                     ? <CheckCheck size={11} className="text-green-400 flex-shrink-0" />
                     : <Copy size={11} className="text-white/30 flex-shrink-0" />}
                 </div>
-
-                {/* Actions */}
                 <div className="flex gap-1.5">
                   <button onClick={() => openPreview(record)}
                     className="flex-1 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 text-[11px] font-semibold text-orange-400 flex items-center justify-center gap-1 hover:bg-orange-500/20 transition-all">
@@ -327,7 +323,6 @@ export default function AdminQRPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-6"
           onClick={e => e.target === e.currentTarget && setPreview(null)}>
           <div className="bg-gray-900 border border-white/[0.07] rounded-3xl w-[480px] shadow-2xl overflow-hidden">
-
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
               <div>
                 <h2 className="text-[18px] font-bold text-white">Table {preview.tableNumber} — QR Code</h2>
@@ -338,9 +333,7 @@ export default function AdminQRPage() {
                 <X size={14} className="text-white/50" />
               </button>
             </div>
-
             <div className="p-6">
-              {/* QR display */}
               <div className="flex justify-center mb-6">
                 <div className="relative w-[220px] h-[220px] bg-white/[0.03] border border-white/[0.06] rounded-3xl flex items-center justify-center">
                   {genState === 'generating' && (
@@ -360,8 +353,6 @@ export default function AdminQRPage() {
                   )}
                 </div>
               </div>
-
-              {/* Meta grid */}
               <div className="grid grid-cols-2 gap-2 mb-4">
                 {[
                   { label: 'Table ID',      val: preview.tableId },
@@ -375,8 +366,6 @@ export default function AdminQRPage() {
                   </div>
                 ))}
               </div>
-
-              {/* Encoded URL */}
               <div className="mb-4">
                 <p className="text-[11px] text-white/25 uppercase tracking-widest font-semibold mb-1.5">Encoded URL</p>
                 <div className="flex items-center gap-2 bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
@@ -395,8 +384,6 @@ export default function AdminQRPage() {
                   </div>
                 </div>
               </div>
-
-              {/* S3 path */}
               <div className="mb-5">
                 <p className="text-[11px] text-white/25 uppercase tracking-widest font-semibold mb-1.5">S3 Storage Path</p>
                 <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
@@ -404,27 +391,16 @@ export default function AdminQRPage() {
                   <p className="text-[9px] text-white/25 font-mono break-all mt-0.5">{preview.s3Url}</p>
                 </div>
               </div>
-
-              {/* Actions */}
               <div className="flex gap-2">
                 <button onClick={() => previewImg && downloadQR(preview)} disabled={!previewImg}
                   className="flex-1 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[13px] font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-orange-500/25 disabled:opacity-40">
                   <Download size={15} /> Download PNG
                 </button>
-                <button
-                  onClick={() => {
-                    if (previewImg) {
-                      const w = window.open('', '_print');
-                      w?.document.write(`<img src="${previewImg}" style="width:100%;max-width:400px;"/>`);
-                      w?.print();
-                    }
-                  }}
-                  disabled={!previewImg}
+                <button onClick={() => { if (previewImg) { const w = window.open('', '_print'); w?.document.write(`<img src="${previewImg}" style="width:100%;max-width:400px;"/>`); w?.print(); }}} disabled={!previewImg}
                   className="h-11 px-4 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[13px] font-semibold flex items-center gap-2 hover:bg-white/10 hover:text-white/80 transition-all disabled:opacity-40">
                   <Printer size={15} /> Print
                 </button>
               </div>
-
               <div className="mt-3 text-center">
                 <a href={preview.encodedUrl} target="_blank" rel="noopener noreferrer"
                   className="text-[12px] text-orange-400 hover:text-orange-300 underline underline-offset-2 flex items-center justify-center gap-1 transition-colors">
@@ -448,34 +424,23 @@ export default function AdminQRPage() {
                 <X size={14} className="text-white/50" />
               </button>
             </div>
-
             <div className="mb-4">
               <label className="block text-[11px] text-white/30 uppercase tracking-widest font-semibold mb-1.5">Table Number</label>
-              <input
-                value={newTable.number}
-                onChange={e => setNewTable(p => ({ ...p, number: e.target.value }))}
+              <input value={newTable.number} onChange={e => setNewTable(p => ({ ...p, number: e.target.value }))}
                 placeholder="e.g. 13" type="number" min="1" max="99"
-                className="w-full h-10 px-3 rounded-xl bg-gray-800 border border-white/10 text-white text-[13px] placeholder-white/20 focus:outline-none focus:border-orange-500/50 transition"
-              />
+                className="w-full h-10 px-3 rounded-xl bg-gray-800 border border-white/10 text-white text-[13px] placeholder-white/20 focus:outline-none focus:border-orange-500/50 transition" />
             </div>
-
             <div className="mb-4">
               <label className="block text-[11px] text-white/30 uppercase tracking-widest font-semibold mb-2">Zone</label>
               <div className="flex gap-2 flex-wrap">
                 {['Main Hall', 'Garden Terrace', 'Private Dining', 'Lounge Bar'].map(z => (
                   <button key={z} onClick={() => setNewTable(p => ({ ...p, zone: z, outlet: z }))}
                     className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${
-                      newTable.zone === z
-                        ? 'bg-orange-500 border-orange-500 text-white'
-                        : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'
-                    }`}>
-                    {z}
-                  </button>
+                      newTable.zone === z ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'
+                    }`}>{z}</button>
                 ))}
               </div>
             </div>
-
-            {/* Preview URL */}
             <div className="bg-orange-500/5 border border-orange-500/15 rounded-xl p-3 mb-5">
               <p className="text-[11px] text-orange-400/70 font-semibold mb-1">QR will encode:</p>
               <p className="text-[10px] text-white/30 font-mono break-all">
@@ -483,7 +448,6 @@ export default function AdminQRPage() {
                 {`/guest?rid=${RESTAURANT_ID.slice(0, 8)}…&tid=T${(newTable.number || '??').padStart(2, '0')}`}
               </p>
             </div>
-
             <div className="flex gap-2">
               <button onClick={() => setShowNewForm(false)}
                 className="flex-1 h-10 rounded-xl bg-white/5 border border-white/10 text-[13px] font-semibold text-white/40 hover:bg-white/10 hover:text-white/60 transition-all">
