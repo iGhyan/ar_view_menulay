@@ -16,7 +16,7 @@ type ModalState = { open: boolean; item?: ApiMenuItem };
 type LoadState  = 'idle' | 'loading' | 'success' | 'error';
 type GlbStatus  = 'idle' | 'uploading' | 'approved' | 'error';
 
-const ADMIN_RESTAURANT_ID = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID ?? '2687382e-3b00-4f57-9014-f484df89e3fe';
+const ADMIN_RESTAURANT_ID = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID ?? 'eea190fd-b8dd-470d-aff1-7d75be5c2efb';
 const MENU_BASE_URL = '/api/menu'; // proxied through Next.js — avoids CORS
 
 async function createMenuItemWithFiles(
