@@ -24,7 +24,7 @@ interface QrRecord {
 
 // ── Correct IDs from env ───────────────────────────────────────────────────────
 const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID ?? 'eea190fd-b8dd-470d-aff1-7d75be5c2efb';
-const DEFAULT_BASE  = process.env.NEXT_PUBLIC_BASE_URL      ?? 'https://ar-menu-lime.vercel.app';
+const DEFAULT_BASE  = process.env.NEXT_PUBLIC_BASE_URL      ?? 'https://ar-view-menulay.vercel.app';
 
 const ZONES = ['All Zones', 'Main Hall', 'Garden Terrace', 'Private Dining'];
 
