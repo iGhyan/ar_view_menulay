@@ -125,7 +125,7 @@ export default function KitchenDisplayPage() {
       <header style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 24px',background:`linear-gradient(135deg,${C.dark},#B22222)`,boxShadow:'0 2px 12px rgba(137,28,28,0.2)',flexShrink:0}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <div style={{width:38,height:38,borderRadius:12,background:'rgba(255,199,44,0.2)',border:'1.5px solid rgba(255,199,44,0.4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>🍽️</div>
-          <div><p style={{color:'#fff',fontSize:17,fontWeight:800,margin:0,fontFamily:'Georgia,serif'}}>Das Pardes · KDS</p><p style={{color:'rgba(255,199,44,0.7)',fontSize:10,fontWeight:700,letterSpacing:2,textTransform:'uppercase',margin:0}}>Kitchen Display System</p></div>
+          <div><p style={{color:'#fff',fontSize:17,fontWeight:800,margin:0,fontFamily:'Georgia,serif'}}>Menulay · KDS</p><p style={{color:'rgba(255,199,44,0.7)',fontSize:10,fontWeight:700,letterSpacing:2,textTransform:'uppercase',margin:0}}>Kitchen Display System</p></div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
           <div style={{textAlign:'center'}}><p style={{fontFamily:'monospace',fontSize:22,fontWeight:800,color:'#fff',margin:0}}>{clock||'00:00:00'}</p><p style={{fontSize:10,color:'rgba(255,255,255,0.5)',margin:0}}>{new Date().toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short'})}</p></div>
