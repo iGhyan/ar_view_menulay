@@ -34,9 +34,9 @@ function MenuContent() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [search,         setSearch]         = useState('');
   const [added,          setAdded]          = useState<Record<string, boolean>>({});
-  const [restName,       setRestName]       = useState('ABC Restaurant');
+  const [restName,       setRestName]       = useState('Das Pardes');
   const [restTagline,    setRestTagline]    = useState('Fine Dining Experience');
-  const [wifiName,       setWifiName]       = useState('abc-restaurant-wifi');
+  const [wifiName,       setWifiName]       = useState('DasPardes2024');
   const [arModal,        setArModal]        = useState<{ itemId: string; itemName: string; emoji: string; arUrl: string; rid: string } | null>(null);
   const { addItem, itemCount } = useCartStore();
 
@@ -115,7 +115,7 @@ function MenuContent() {
       }
       seen.get(key)!.items.push(item);
     }
-    grouped.push(...seen.values());
+    seen.forEach(g => grouped.push(g));
   } else {
     const catLabel = categories.find(c => c.id === activeCategory);
     grouped.push({ catName: catLabel?.name || 'Items', catEmoji: catLabel?.emoji || '🍽️', items: filtered });
@@ -131,7 +131,7 @@ function MenuContent() {
   const rid = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID || process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: '100dvh', fontFamily: 'sans-serif', margin: '0 auto' }}>
+    <div style={{ background: '#f5f5f5', minHeight: '100dvh', fontFamily: 'sans-serif', maxWidth: 680, margin: '0 auto' }}>
 
       {/* ── Restaurant Header ─────────────────────────────────────────────── */}
       <div style={{ background: '#fff', marginBottom: 8 }}>
