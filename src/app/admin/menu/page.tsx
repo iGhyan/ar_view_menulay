@@ -263,7 +263,7 @@ export default function AdminMenuPage() {
         )}
 
         {/* Table */}
-        {loadState !== 'loading' && (
+        {(loadState === 'success' || loadState === 'idle' || loadState === 'error') && (
           <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 8px rgba(137,28,28,0.05)' }}>
             {/* Header */}
             <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 120px 90px 80px 90px 80px', gap: 12, padding: '10px 20px', borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
@@ -337,7 +337,7 @@ export default function AdminMenuPage() {
             ))}
 
             {/* Footer */}
-            {loadState !== 'loading' && activeItems.length > 0 && (
+            {(loadState === 'success' || loadState === 'idle') && activeItems.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
                 <p style={{ fontSize: 11, color: C.subtle, margin: 0 }}>Showing {filtered.length} of {activeItems.length} active items</p>
                 <p style={{ fontSize: 11, color: '#D1D5DB', fontFamily: 'monospace', margin: 0 }}>Source: AWS API Gateway</p>
