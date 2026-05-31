@@ -5,29 +5,20 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, RefreshCw, CheckCircle, ChefHat, Bell, Bike } from 'lucide-react';
 
 interface LineItem {
-  name:                 string;
-  itemId:               string;
-  quantity:             number;
-  unitPriceMinorUnits:  number;
-  totalPriceMinorUnits: number;
+  name: string; itemId: string; quantity: number;
+  unitPriceMinorUnits: number; totalPriceMinorUnits: number;
 }
-
 interface ApiOrder {
-  orderId:                string;
-  status:                 string;
-  tableId?:               string;
-  lineItems:              LineItem[];
-  placedAt?:              string;
-  updatedAt?:             string;
-  totalAmountMinorUnits?: number;
-  currencyCode?:          string;
+  orderId: string; status: string; tableId?: string;
+  lineItems: LineItem[]; placedAt?: string; updatedAt?: string;
+  totalAmountMinorUnits?: number; currencyCode?: string;
 }
 
 const STATUS_STEPS = [
   { key: 'RECEIVED',  label: 'Order Received', icon: CheckCircle, desc: 'Your order is confirmed and sent to kitchen' },
-  { key: 'PREPARING', label: 'Being Prepared', icon: ChefHat,     desc: 'Our chef is cooking your meal'               },
-  { key: 'READY',     label: 'Ready to Serve', icon: Bell,        desc: 'Your food is ready — waiter coming soon!'    },
-  { key: 'DELIVERED', label: 'Delivered',       icon: Bike,        desc: 'Enjoy your meal! 🎉'                         },
+  { key: 'PREPARING', label: 'Being Prepared', icon: ChefHat,     desc: 'Our chef is cooking your meal'              },
+  { key: 'READY',     label: 'Ready to Serve', icon: Bell,        desc: 'Your food is ready — waiter coming soon!'   },
+  { key: 'DELIVERED', label: 'Delivered',       icon: Bike,        desc: 'Enjoy your meal! 🎉'                        },
 ];
 
 const STATUS_RANK: Record<string, number> = {
@@ -39,47 +30,54 @@ const STATUS_RANK: Record<string, number> = {
 
 function getStepIndex(status: string): number {
   const s = (status ?? '').toUpperCase();
-  if (s === 'RECEIVED' || s === 'PENDING')                              return 0;
+  if (s === 'RECEIVED' || s === 'PENDING') return 0;
   if (s === 'PREPARING' || s === 'IN_PROGRESS' || s === 'KITCHEN_ACCEPTED') return 1;
-  if (s === 'READY' || s === 'READY_TO_SERVE' || s === 'FOOD_READY')   return 2;
-  if (s === 'DELIVERED' || s === 'COMPLETED')                           return 3;
+  if (s === 'READY' || s === 'READY_TO_SERVE' || s === 'FOOD_READY') return 2;
+  if (s === 'DELIVERED' || s === 'COMPLETED') return 3;
   return 0;
 }
-
 function formatTime(iso?: string) {
   if (!iso) return '—';
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
-
 function formatRs(minor?: number) {
   if (!minor) return 'Rs 0';
   return 'Rs ' + (minor / 100).toLocaleString('en-PK');
 }
 
 const POLL_MS = 3000;
+const C = { red: '#E1251B', dark: '#891C1C', gold: '#FFC72C', bg: '#FFF8F1', white: '#fff', border: '#F0E8E0', text: '#1A1A1A', muted: '#687780', subtle: '#9CA3AF' };
 
 export default function TrackingPage() {
   const router = useRouter();
-
   const [orders,   setOrders]   = useState<ApiOrder[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [lastSync, setLastSync] = useState('');
   const [pollPct,  setPollPct]  = useState(0);
+  const [sessionTid,   setSessionTid]   = useState('');
+  const [sessionTable, setSessionTable] = useState('');
+
+  useEffect(() => {
+    const hasSession = sessionStorage.getItem('lm_rid') || sessionStorage.getItem('lm_tid');
+    if (!hasSession) { window.location.href = '/guest'; return; }
+    setSessionTid(sessionStorage.getItem('lm_tid') ?? '');
+    setSessionTable(sessionStorage.getItem('lm_table') ?? '');
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await fetch('/api/orders', { cache: 'no-store' });
+      const res  = await fetch('/api/orders', { cache: 'no-store' });
       if (!res.ok) throw new Error(`Orders API ${res.status}`);
       const data = await res.json();
-      const all = (data.orders ?? []);
+      const all  = (data.orders ?? []);
       all.sort((a: ApiOrder, b: ApiOrder) =>
         new Date(b.placedAt ?? 0).getTime() - new Date(a.placedAt ?? 0).getTime()
       );
       setOrders(prev => {
         const prevMap = new Map(prev.map(o => [o.orderId, o]));
-        const merged = all.map((o: ApiOrder) => {
+        const merged  = all.map((o: ApiOrder) => {
           const existing = prevMap.get(o.orderId);
           if (!existing) return o;
           const existingRank = STATUS_RANK[(existing.status ?? '').toUpperCase()] ?? -1;
@@ -115,13 +113,6 @@ export default function TrackingPage() {
     return () => clearInterval(id);
   }, [lastSync]);
 
-  const [sessionTid,   setSessionTid]   = useState('');
-  const [sessionTable, setSessionTable] = useState('');
-  useEffect(() => {
-    setSessionTid(sessionStorage.getItem('lm_tid')   ?? '');
-    setSessionTable(sessionStorage.getItem('lm_table') ?? '');
-  }, []);
-
   const myOrders = orders.filter(o => {
     const t = (o.tableId ?? '').toLowerCase();
     return t === sessionTid.toLowerCase() ||
@@ -129,260 +120,246 @@ export default function TrackingPage() {
            (sessionTable && t.endsWith(sessionTable.padStart(2, '0')));
   });
 
-  const activeOrders = (myOrders.length > 0 ? myOrders : orders).filter(
-    o => !['TIMED_OUT', 'CANCELLED'].includes((o.status ?? '').toUpperCase())
-  );
+  const activeOrders     = (myOrders.length > 0 ? myOrders : orders).filter(o => !['TIMED_OUT','CANCELLED'].includes((o.status ?? '').toUpperCase()));
   const allDisplayOrders = myOrders.length > 0 ? myOrders : orders;
   const displayOrders    = activeOrders.length > 0 ? activeOrders : allDisplayOrders;
   const latest           = displayOrders[0];
   const currentStep      = latest ? getStepIndex(latest.status) : 0;
-  const isCancelled      = ['TIMED_OUT', 'CANCELLED'].includes((latest?.status ?? '').toUpperCase());
+  const isCancelled      = ['TIMED_OUT','CANCELLED'].includes((latest?.status ?? '').toUpperCase());
+
+  const stepColors = (done: boolean, current: boolean) => ({
+    circle: done    ? { bg: '#FFF0EE', border: C.red }
+          : current ? { bg: '#FFF0EE', border: C.red }
+          :            { bg: '#F9FAFB', border: '#E5E7EB' },
+    icon:   done || current ? C.red : C.subtle,
+  });
 
   return (
-    <main className="min-h-dvh bg-gray-950 flex flex-col items-center">
-      <div className="phone-shell">
+    <div style={{ background: C.bg, minHeight: '100dvh', fontFamily: 'sans-serif', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
 
-        {/* Status bar */}
-        <div className="flex justify-between px-5 pt-4 text-xs text-white/20">
-          <span>{new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-          <span>●●●</span>
-        </div>
-
-        {/* ── Nav ── */}
-        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
+      {/* ── Header ────────────────────────────────────────────────────────── */}
+      <div style={{ background: `linear-gradient(135deg, ${C.dark}, #B22222)`, padding: '16px 20px 20px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => router.back()}
-            className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all">
-            <ArrowLeft size={16} className="text-white/50" />
+            style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(255,255,255,0.15)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <ArrowLeft size={18} color="#fff" />
           </button>
-          <div className="flex-1">
-            <h1 className="text-[20px] font-bold text-white tracking-tight">Order Tracking</h1>
-            <p className="text-[11px] text-white/30">
-              {sessionTid ? `Table ${sessionTable} · ` : ''}Live updates every 10s
+          <div style={{ flex: 1 }}>
+            <h1 style={{ color: '#fff', fontSize: 20, fontWeight: 800, margin: 0, fontFamily: 'Georgia, serif' }}>Order Tracking</h1>
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, margin: '2px 0 0' }}>
+              {sessionTid ? `Table ${sessionTable} · ` : ''}Live updates every 3s
             </p>
           </div>
           <button onClick={() => load()}
-            className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-orange-500/10 hover:border-orange-500/25 transition-all">
-            <RefreshCw size={14} className={`text-white/40 ${loading ? 'animate-spin text-orange-400' : ''}`} />
+            style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(255,255,255,0.15)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <RefreshCw size={14} color="#fff" className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
+      </div>
 
-        {/* Poll progress bar */}
-        <div className="h-[2px] bg-white/[0.04]">
-          <div className="h-full bg-orange-500/50 transition-all duration-200" style={{ width: `${pollPct}%` }} />
-        </div>
+      {/* Poll progress bar */}
+      <div style={{ height: 3, background: C.border, flexShrink: 0 }}>
+        <div style={{ height: '100%', background: C.red, transition: 'width 0.2s', width: `${pollPct}%` }} />
+      </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+      {/* ── Scrollable content ────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
 
-          {/* Loading */}
-          {loading && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <RefreshCw size={28} className="animate-spin text-orange-400/50" />
-              <p className="text-[13px] text-white/30">Fetching your orders…</p>
+        {/* Loading */}
+        {loading && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', gap: 12 }}>
+            <div style={{ width: 32, height: 32, border: `3px solid ${C.red}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <p style={{ color: C.subtle, fontSize: 13 }}>Fetching your orders…</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div style={{ padding: 16, background: '#FFF0F0', border: '1px solid #FFD0D0', borderRadius: 16, textAlign: 'center', marginBottom: 16 }}>
+            <p style={{ fontSize: 13, color: C.red, margin: '0 0 8px' }}>{error}</p>
+            <button onClick={() => load()} style={{ fontSize: 12, color: C.red, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>Retry</button>
+          </div>
+        )}
+
+        {/* Empty */}
+        {!loading && !error && orders.length === 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', gap: 12, textAlign: 'center' }}>
+            <span style={{ fontSize: 48, opacity: 0.2 }}>📋</span>
+            <p style={{ fontSize: 15, fontWeight: 700, color: C.subtle, margin: 0 }}>No orders yet</p>
+            <p style={{ fontSize: 12, color: '#D1D5DB', margin: 0 }}>Your orders will appear here once placed</p>
+            <button onClick={() => router.push('/guest/menu')}
+              style={{ marginTop: 8, padding: '10px 24px', borderRadius: 24, background: '#FFF3E0', border: `1.5px solid #FED7AA`, color: C.red, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              Browse Menu
+            </button>
+          </div>
+        )}
+
+        {latest && !loading && (
+          <>
+            {/* ── Latest order card ───────────────────────────────────────── */}
+            <div style={{ background: isCancelled ? '#FFF0F0' : '#FFF3E0', border: `1.5px solid ${isCancelled ? '#FFD0D0' : '#FED7AA'}`, borderRadius: 18, padding: '16px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div>
+                  <p style={{ fontFamily: 'monospace', fontSize: 11, color: C.subtle, margin: '0 0 3px' }}>Order ID</p>
+                  <p style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 800, color: C.dark, margin: 0 }}>
+                    #{latest.orderId.slice(0, 8).toUpperCase()}
+                  </p>
+                </div>
+                <span style={{
+                  fontSize: 11, padding: '5px 12px', borderRadius: 20, fontWeight: 700,
+                  background: latest.status === 'DELIVERED' ? '#F0FFF4' :
+                              latest.status === 'READY'     ? '#EFF6FF' :
+                              latest.status === 'PREPARING' ? '#FFF3E0' :
+                              isCancelled                   ? '#FFF0F0' : '#FFFBEB',
+                  color:      latest.status === 'DELIVERED' ? '#16a34a' :
+                              latest.status === 'READY'     ? '#1d4ed8' :
+                              latest.status === 'PREPARING' ? '#c2410c' :
+                              isCancelled                   ? C.red     : '#d97706',
+                  border: `1px solid ${latest.status === 'DELIVERED' ? '#BBF7D0' : latest.status === 'READY' ? '#BFDBFE' : '#FED7AA'}`,
+                }}>
+                  {isCancelled ? 'Cancelled' : latest.status}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 16, fontSize: 11, color: C.muted }}>
+                <span>🕐 {formatTime(latest.placedAt)}</span>
+                <span>🪑 {latest.tableId ?? `Table ${sessionTable}`}</span>
+                <span>💰 {formatRs(latest.totalAmountMinorUnits)}</span>
+              </div>
             </div>
-          )}
 
-          {/* Error */}
-          {error && !loading && (
-            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-center mb-4">
-              <p className="text-[13px] text-red-300">{error}</p>
-              <button onClick={() => load()} className="text-[12px] text-red-400 underline mt-1">Retry</button>
+            {/* ── Live status stepper ─────────────────────────────────────── */}
+            {!isCancelled && (
+              <>
+                <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 16px' }}>Live Status</p>
+                <div style={{ position: 'relative', marginBottom: 24 }}>
+                  {/* Track line bg */}
+                  <div style={{ position: 'absolute', left: 19, top: 20, bottom: 20, width: 2, background: C.border }} />
+                  {/* Track line progress */}
+                  <div style={{ position: 'absolute', left: 19, top: 20, width: 2, background: C.red, transition: 'height 1s', height: `calc(${(currentStep / (STATUS_STEPS.length - 1)) * 100}%)` }} />
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                    {STATUS_STEPS.map((step, i) => {
+                      const done    = i < currentStep;
+                      const current = i === currentStep;
+                      const sc      = stepColors(done, current);
+                      const Icon    = step.icon;
+                      return (
+                        <div key={step.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 16, position: 'relative', zIndex: 1 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: '50%', border: `2px solid ${sc.circle.border}`, background: sc.circle.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.5s', boxShadow: current ? `0 0 16px rgba(225,37,27,0.25)` : 'none' }}>
+                            <Icon size={16} color={sc.icon} />
+                          </div>
+                          <div style={{ flex: 1, paddingTop: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <p style={{ fontSize: 14, fontWeight: 700, color: done || current ? C.text : C.subtle, margin: 0 }}>
+                                {step.label}
+                              </p>
+                              {current && (
+                                <span style={{ fontSize: 9, background: '#FFF0EE', color: C.red, border: `1px solid #FED0CC`, padding: '2px 8px', borderRadius: 20, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                                  Live
+                                </span>
+                              )}
+                              {done && <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 700 }}>✓</span>}
+                            </div>
+                            <p style={{ fontSize: 11, color: done || current ? C.muted : '#D1D5DB', margin: '3px 0 0', lineHeight: 1.5 }}>
+                              {step.desc}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Cancelled */}
+            {isCancelled && (
+              <div style={{ textAlign: 'center', padding: '32px 0', marginBottom: 16 }}>
+                <span style={{ fontSize: 48 }}>❌</span>
+                <p style={{ fontSize: 15, fontWeight: 700, color: C.red, margin: '12px 0 4px' }}>Order Cancelled / Timed Out</p>
+                <p style={{ fontSize: 13, color: C.subtle }}>Please place a new order or contact staff</p>
+              </div>
+            )}
+
+            {/* ── Items ordered ───────────────────────────────────────────── */}
+            <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 10px' }}>Items Ordered</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {(latest.lineItems ?? []).map((li, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FFF3E0', border: '1px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🍽️</div>
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: C.text, margin: 0 }}>{li.name}</p>
+                      <p style={{ fontSize: 11, color: C.subtle, margin: 0 }}>× {li.quantity}</p>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: C.red, fontFamily: 'Georgia, serif' }}>
+                    {formatRs(li.totalPriceMinorUnits)}
+                  </span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.muted }}>Total</span>
+                <span style={{ fontSize: 18, fontWeight: 900, color: C.dark, fontFamily: 'Georgia, serif' }}>
+                  {formatRs(latest.totalAmountMinorUnits)}
+                </span>
+              </div>
             </div>
-          )}
+          </>
+        )}
 
-          {/* Empty */}
-          {!loading && !error && orders.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-              <span className="text-4xl opacity-20">📋</span>
-              <p className="text-[14px] font-semibold text-white/30">No orders yet</p>
-              <p className="text-[12px] text-white/20">Your orders will appear here once placed</p>
-              <button onClick={() => router.push('/guest/menu')}
-                className="mt-3 px-5 py-2.5 rounded-xl bg-orange-500/10 border border-orange-500/25 text-orange-400 text-[13px] font-semibold hover:bg-orange-500/20 transition-all">
-                Browse Menu
-              </button>
-            </div>
-          )}
-
-          {latest && !loading && (
-            <>
-              {/* ── Latest order card ── */}
-              <div className={`rounded-2xl p-4 mb-5 border ${
-                isCancelled
-                  ? 'bg-red-500/[0.07] border-red-500/20'
-                  : 'bg-orange-500/[0.07] border-orange-500/20'
-              }`}>
-                <div className="flex items-center justify-between mb-2">
+        {/* ── Previous orders ─────────────────────────────────────────────── */}
+        {displayOrders.length > 1 && !loading && (
+          <>
+            <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 10px' }}>Previous Orders</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              {displayOrders.slice(1).map(order => (
+                <div key={order.orderId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 14 }}>
                   <div>
-                    <p className="font-mono text-[11px] text-white/30 mb-0.5">Order ID</p>
-                    <p className="font-mono text-[14px] text-orange-400 font-bold">
-                      #{latest.orderId.slice(0, 8).toUpperCase()}
+                    <p style={{ fontFamily: 'monospace', fontSize: 12, color: C.muted, fontWeight: 700, margin: 0 }}>
+                      #{order.orderId.slice(0, 8).toUpperCase()}
+                    </p>
+                    <p style={{ fontSize: 11, color: C.subtle, margin: '2px 0 0' }}>
+                      {formatTime(order.placedAt)} · {order.lineItems?.length ?? 0} items
                     </p>
                   </div>
-                  <span className={`text-[11px] px-3 py-1.5 rounded-full font-semibold ${
-                    latest.status === 'DELIVERED'  ? 'bg-green-500/15 text-green-400'  :
-                    latest.status === 'READY'      ? 'bg-blue-500/15 text-blue-300'    :
-                    latest.status === 'PREPARING'  ? 'bg-orange-500/15 text-orange-300':
-                    isCancelled                    ? 'bg-red-500/15 text-red-400'      :
-                                                     'bg-amber-500/15 text-amber-300'
-                  }`}>
-                    {isCancelled ? 'Cancelled' : latest.status}
-                  </span>
-                </div>
-                <div className="flex gap-4 text-[11px] text-white/30">
-                  <span>🕐 {formatTime(latest.placedAt)}</span>
-                  <span>🪑 {latest.tableId ?? `Table ${sessionTable}`}</span>
-                  <span>💰 {formatRs(latest.totalAmountMinorUnits)}</span>
-                </div>
-              </div>
-
-              {/* ── Live status stepper ── */}
-              {!isCancelled && (
-                <>
-                  <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-4">Live Status</p>
-                  <div className="relative mb-6">
-                    {/* Track line bg */}
-                    <div className="absolute left-[19px] top-5 bottom-5 w-[2px] bg-white/[0.06]" />
-                    {/* Track line progress */}
-                    <div
-                      className="absolute left-[19px] top-5 w-[2px] bg-orange-500/60 transition-all duration-1000"
-                      style={{ height: `calc(${(currentStep / (STATUS_STEPS.length - 1)) * 100}%)` }}
-                    />
-                    <div className="flex flex-col gap-7">
-                      {STATUS_STEPS.map((step, i) => {
-                        const done    = i < currentStep;
-                        const current = i === currentStep;
-                        const Icon    = step.icon;
-                        return (
-                          <div key={step.key} className="flex items-start gap-4 relative z-10">
-                            <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
-                              done    ? 'bg-orange-500/20 border-orange-500/60'  :
-                              current ? 'bg-orange-500/15 border-orange-500 shadow-[0_0_16px_rgba(249,115,22,0.35)] animate-pulse' :
-                                        'bg-white/[0.03] border-white/[0.08]'
-                            }`}>
-                              <Icon size={16} className={done || current ? 'text-orange-400' : 'text-white/20'} />
-                            </div>
-                            <div className="flex-1 pt-1.5">
-                              <div className="flex items-center gap-2">
-                                <p className={`text-[14px] font-semibold ${
-                                  done || current ? 'text-white/80' : 'text-white/20'
-                                }`}>
-                                  {step.label}
-                                </p>
-                                {current && (
-                                  <span className="text-[9px] bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest animate-pulse">
-                                    Live
-                                  </span>
-                                )}
-                                {done && (
-                                  <span className="text-[9px] text-green-400/70">✓</span>
-                                )}
-                              </div>
-                              <p className={`text-[11px] mt-0.5 leading-relaxed ${
-                                done || current ? 'text-white/30' : 'text-white/15'
-                              }`}>
-                                {step.desc}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ fontSize: 14, fontWeight: 800, color: C.red, fontFamily: 'Georgia, serif', margin: 0 }}>{formatRs(order.totalAmountMinorUnits)}</p>
+                    <p style={{ fontSize: 10, color: order.status === 'DELIVERED' ? '#16a34a' : C.subtle, margin: '2px 0 0', fontWeight: 600 }}>{order.status}</p>
                   </div>
-                </>
-              )}
-
-              {/* Cancelled */}
-              {isCancelled && (
-                <div className="flex flex-col items-center py-8 gap-3 text-center mb-5">
-                  <span className="text-4xl">❌</span>
-                  <p className="text-[14px] font-bold text-red-300">Order Cancelled / Timed Out</p>
-                  <p className="text-[12px] text-white/30">Please place a new order or contact staff</p>
                 </div>
-              )}
+              ))}
+            </div>
+          </>
+        )}
 
-              {/* ── Items ordered ── */}
-              <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-3">Items Ordered</p>
-              <div className="flex flex-col gap-2 mb-5">
-                {(latest.lineItems ?? []).map((li, i) => (
-                  <div key={i} className="flex items-center justify-between p-3.5 rounded-xl bg-gray-900 border border-white/[0.06]">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/15 flex items-center justify-center text-[15px]">
-                        🍽️
-                      </div>
-                      <div>
-                        <p className="text-[13px] font-semibold text-white/75">{li.name}</p>
-                        <p className="text-[11px] text-white/25">× {li.quantity}</p>
-                      </div>
-                    </div>
-                    <span className="text-[13px] font-bold text-orange-400">
-                      {formatRs(li.totalPriceMinorUnits)}
-                    </span>
-                  </div>
-                ))}
-                <div className="flex justify-between items-center px-3.5 py-2.5 mt-1">
-                  <span className="text-[13px] font-semibold text-white/40">Total</span>
-                  <span className="text-[16px] font-bold text-orange-400">
-                    {formatRs(latest.totalAmountMinorUnits)}
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ── Previous orders ── */}
-          {displayOrders.length > 1 && !loading && (
-            <>
-              <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-3">Previous Orders</p>
-              <div className="flex flex-col gap-2 mb-4">
-                {displayOrders.slice(1).map(order => (
-                  <div key={order.orderId}
-                    className="flex items-center justify-between p-3.5 rounded-xl bg-gray-900 border border-white/[0.06]">
-                    <div>
-                      <p className="font-mono text-[12px] text-white/35">
-                        #{order.orderId.slice(0, 8).toUpperCase()}
-                      </p>
-                      <p className="text-[11px] text-white/20 mt-0.5">
-                        {formatTime(order.placedAt)} · {order.lineItems?.length ?? 0} items
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[13px] font-bold text-orange-400">{formatRs(order.totalAmountMinorUnits)}</p>
-                      <p className={`text-[10px] mt-0.5 ${
-                        order.status === 'DELIVERED' ? 'text-green-400/60' :
-                        order.status === 'READY'     ? 'text-blue-400/60'  :
-                        'text-white/20'
-                      }`}>{order.status}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {lastSync && (
-            <p className="text-center text-[10px] text-white/15 pb-4">
-              Updated {lastSync} · Auto-refresh every 10s
-            </p>
-          )}
-        </div>
-
-        {/* ── Bottom nav ── */}
-        <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.06] bg-gray-900/80 backdrop-blur-sm">
-          {[
-            { icon: '🏠', label: 'Home',   href: '/guest'            },
-            { icon: '📖', label: 'Menu',   href: '/guest/menu'       },
-            { icon: '🛒', label: 'Cart',   href: '/guest/cart'       },
-            { icon: '📡', label: 'Orders', href: '/guest/tracking', active: true },
-          ].map(n => (
-            <button key={n.label} onClick={() => router.push(n.href)}
-              className={`flex flex-col items-center gap-1 px-2.5 py-1 transition-all ${
-                (n as any).active ? 'text-orange-400' : 'text-white/20 hover:text-white/40'
-              }`}>
-              <span className="text-[20px]">{n.icon}</span>
-              <span className={`text-[10px] font-semibold ${(n as any).active ? 'text-orange-400' : ''}`}>{n.label}</span>
-            </button>
-          ))}
-        </div>
+        {lastSync && (
+          <p style={{ textAlign: 'center', fontSize: 10, color: '#D1D5DB', paddingBottom: 16 }}>
+            Updated {lastSync} · Auto-refresh every 3s
+          </p>
+        )}
       </div>
-    </main>
+
+      {/* ── Bottom nav ────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '10px 0 20px', borderTop: `1.5px solid ${C.border}`, background: C.white, flexShrink: 0 }}>
+        {[
+          { icon: '🏠', label: 'Home',   href: '/guest'            },
+          { icon: '📖', label: 'Menu',   href: '/guest/menu'       },
+          { icon: '🛒', label: 'Cart',   href: '/guest/cart'       },
+          { icon: '📡', label: 'Orders', href: '/guest/tracking', active: true },
+        ].map(n => (
+          <button key={n.label} onClick={() => router.push(n.href)}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '4px 12px', background: 'none', border: 'none', cursor: 'pointer', color: (n as any).active ? C.red : C.subtle }}>
+            <span style={{ fontSize: 22 }}>{n.icon}</span>
+            <span style={{ fontSize: 10, fontWeight: 600 }}>{n.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <style>{`
+        .animate-spin { animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
   );
 }

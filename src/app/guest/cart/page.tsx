@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MapPin, Tag, Send, Lock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Tag, Send, Lock, AlertCircle, ChevronRight } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
 import { formatPrice } from '@/lib/utils';
+
+function formatRs(price: number) { return `Rs. ${price.toLocaleString('en-PK')}`; }
 
 export default function CartPage() {
   const router = useRouter();
@@ -21,6 +23,8 @@ export default function CartPage() {
   const [tableNum,     setTableNum]     = useState('');
 
   useEffect(() => {
+    const hasSession = sessionStorage.getItem('lm_rid') || sessionStorage.getItem('lm_tid');
+    if (!hasSession) { window.location.href = '/guest'; return; }
     const tid  = sessionStorage.getItem('lm_tid')   ?? '';
     const tnum = sessionStorage.getItem('lm_table') ?? '';
     setTableId(tid || `table-${tnum || '01'}`);
@@ -32,18 +36,15 @@ export default function CartPage() {
 
   const applyPromo = () => {
     if (promo.trim().toUpperCase() === 'HAPPY20') {
-      setPromoApplied(true);
-      setPromo('HAPPY20');
+      setPromoApplied(true); setPromo('HAPPY20');
     }
   };
 
-  // ── Place Order — with Cognito token ──────────────────────────────────────
   const placeOrder = async () => {
     if (items.length === 0) return;
     setPlacing(true); setOrderError('');
     try {
       const tid = sessionStorage.getItem('lm_tid') ?? tableId ?? 'table-01';
-
       const payload = {
         tenantId:              process.env.NEXT_PUBLIC_TENANT_ID_KDS,
         restaurantId:          process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS,
@@ -59,13 +60,7 @@ export default function CartPage() {
         })),
         ...(notes.trim() && { notes: notes.trim() }),
       };
-
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-     
+      const res  = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? data?.message ?? `Error ${res.status}`);
       setOrderId(data.orderId ?? '');
@@ -78,199 +73,224 @@ export default function CartPage() {
     }
   };
 
-  // ── Order success ──
-  if (placed) {
-    return (
-      <main className="min-h-dvh bg-gray-950 flex flex-col items-center">
-        <div className="phone-shell">
-          <div className="flex-1 flex flex-col items-center justify-center px-6 pb-10">
-            <div className="relative w-[100px] h-[100px] mb-6">
-              <div className="absolute inset-0 rounded-full border border-orange-500/30" />
-              <div className="absolute -inset-2 rounded-full border border-orange-500/15 animate-pulse" />
-              <div className="absolute inset-0 rounded-full bg-orange-500/15 flex items-center justify-center text-4xl">✓</div>
-            </div>
-            <h2 className="text-[26px] font-bold text-white tracking-tight mb-2 text-center">Order Placed!</h2>
-            <p className="text-[14px] text-white/35 text-center leading-relaxed mb-6 px-4">
-              Your order has been sent to the kitchen. We'll notify you as it's being prepared.
-            </p>
-            {orderId && (
-              <div className="bg-orange-500/10 border border-orange-500/25 rounded-full px-5 py-2 mb-8">
-                <span className="text-[13px] text-orange-400 font-semibold font-mono">
-                  #{orderId.slice(0, 8).toUpperCase()}
-                </span>
-              </div>
-            )}
-            <button
-              onClick={() => router.push('/guest/tracking')}
-              className="h-12 w-full max-w-[280px] rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-[14px] font-bold flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 transition-all">
-              📡 Track My Order
-            </button>
+  const C = { red: '#E1251B', dark: '#891C1C', gold: '#FFC72C', bg: '#FFF8F1', white: '#fff', border: '#F0E8E0', text: '#1A1A1A', muted: '#687780', subtle: '#9CA3AF' };
+
+  // ── Order success ─────────────────────────────────────────────────────────
+  if (placed) return (
+    <div style={{ background: C.bg, minHeight: '100dvh', fontFamily: 'sans-serif', maxWidth: 480, margin: '0 auto' }}>
+      {/* Red header */}
+      <div style={{ background: 'linear-gradient(135deg, #891C1C, #B22222)', padding: '28px 24px 40px', textAlign: 'center' }}>
+        <p style={{ color: C.gold, fontSize: 11, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', margin: '0 0 4px' }}>Das Pardes</p>
+        <h1 style={{ color: '#fff', fontSize: 24, fontWeight: 900, fontFamily: 'Georgia, serif', margin: 0 }}>Order Confirmed!</h1>
+      </div>
+      {/* Floating card */}
+      <div style={{ margin: '-24px 20px 0', background: C.white, borderRadius: 24, padding: '28px 24px', boxShadow: '0 8px 32px rgba(137,28,28,0.12)', border: `1px solid ${C.border}`, textAlign: 'center' }}>
+        <div style={{ width: 88, height: 88, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, margin: '0 auto 16px', boxShadow: '0 0 0 12px rgba(34,197,94,0.1), 0 0 0 24px rgba(34,197,94,0.05)' }}>✓</div>
+        <h2 style={{ fontSize: 26, fontWeight: 900, color: C.text, fontFamily: 'Georgia, serif', margin: '0 0 8px' }}>Order Placed!</h2>
+        <p style={{ fontSize: 14, color: C.muted, margin: '0 0 16px', lineHeight: 1.6 }}>Your order has been sent to the kitchen. We'll notify you as it's prepared.</p>
+        {orderId && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #FFF3E0, #FFF8F1)', border: `2px solid ${C.gold}`, borderRadius: 28, padding: '10px 24px', marginBottom: 8 }}>
+            <span style={{ fontSize: 11, color: C.dark, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase' }}>Order</span>
+            <span style={{ fontSize: 16, fontWeight: 900, color: C.dark, fontFamily: 'monospace', letterSpacing: 2 }}>#{orderId.slice(0, 8).toUpperCase()}</span>
           </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+          <span style={{ fontSize: 18 }}>⏱️</span>
+          <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>Estimated: <strong style={{ color: C.red }}>15–20 min</strong></span>
         </div>
-      </main>
-    );
-  }
+      </div>
+      {/* Steps */}
+      <div style={{ margin: '20px 20px', background: C.white, borderRadius: 20, padding: '20px', border: `1px solid ${C.border}` }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: C.subtle, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 16px' }}>What happens next</p>
+        {[
+          { icon: '✅', title: 'Order Received',  desc: 'Kitchen has your order',    done: true  },
+          { icon: '👨‍🍳', title: 'Being Prepared', desc: 'Chef is cooking your meal', done: false },
+          { icon: '🔔', title: 'Ready to Serve',  desc: 'Waiter brings it to you',   done: false },
+        ].map((step, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: i < 2 ? 14 : 0 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: step.done ? '#F0FFF4' : '#F9FAFB', border: `2px solid ${step.done ? '#BBF7D0' : '#E5E7EB'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{step.icon}</div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: step.done ? C.text : C.subtle, margin: 0 }}>{step.title}</p>
+              <p style={{ fontSize: 12, color: step.done ? C.muted : '#D1D5DB', margin: 0 }}>{step.desc}</p>
+            </div>
+            {step.done && <span style={{ color: '#22c55e', fontWeight: 800 }}>✓</span>}
+          </div>
+        ))}
+      </div>
+      {/* Buttons */}
+      <div style={{ padding: '0 20px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <button onClick={() => router.push('/guest/tracking')}
+          style={{ width: '100%', height: 56, borderRadius: 28, background: C.red, color: '#fff', border: 'none', fontSize: 16, fontWeight: 800, cursor: 'pointer', boxShadow: '0 6px 20px rgba(225,37,27,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          📡 Track My Order
+        </button>
+        <button onClick={() => router.push('/guest/menu')}
+          style={{ width: '100%', height: 48, borderRadius: 24, background: '#FFF3E0', color: C.dark, border: `2px solid #FED7AA`, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          ← Back to Menu
+        </button>
+      </div>
+    </div>
+  );
 
-  // ── Cart screen ──
+  // ── Cart screen ───────────────────────────────────────────────────────────
   return (
-    <main className="min-h-dvh bg-gray-950 flex flex-col items-center">
-      <div className="phone-shell">
+    <div style={{ background: C.bg, minHeight: '100dvh', fontFamily: 'sans-serif', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
 
-        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg, #891C1C, #B22222)', padding: '16px 20px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => router.back()}
-            className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all">
-            <ArrowLeft size={16} className="text-white/50" />
+            style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(255,255,255,0.15)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <ArrowLeft size={18} color="#fff" />
           </button>
-          <h1 className="text-[20px] font-bold text-white flex-1 tracking-tight">Your Cart</h1>
-          <span className="bg-orange-500/10 border border-orange-500/25 rounded-full px-3 py-1 text-[11px] text-orange-400 font-semibold">
+          <h1 style={{ color: '#fff', fontSize: 20, fontWeight: 800, flex: 1, margin: 0, fontFamily: 'Georgia, serif' }}>Your Cart</h1>
+          <span style={{ background: 'rgba(255,199,44,0.2)', border: '1px solid rgba(255,199,44,0.4)', borderRadius: 20, padding: '4px 12px', color: C.gold, fontSize: 12, fontWeight: 700 }}>
             {items.length} item{items.length !== 1 ? 's' : ''}
           </span>
         </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto px-5">
+      {/* Scrollable content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
 
-          <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mt-4 mb-3">Order Items</p>
-          <div className="flex flex-col gap-2.5 mb-4">
-            {items.length === 0 && (
-              <div className="flex flex-col items-center py-12 gap-3 text-center">
-                <span className="text-4xl opacity-20">🛒</span>
-                <p className="text-white/25 text-[13px]">Your cart is empty</p>
-                <button onClick={() => router.push('/guest/menu')}
-                  className="px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/25 text-orange-400 text-[13px] font-semibold hover:bg-orange-500/20 transition-all">
-                  Browse Menu
-                </button>
-              </div>
-            )}
-            {items.map(item => (
-              <div key={item.id} className="flex items-start gap-3 p-3.5 rounded-2xl bg-gray-900 border border-white/[0.06] hover:border-white/10 transition-all">
-                <div className="w-[52px] h-[52px] rounded-[14px] bg-orange-500/10 border border-orange-500/15 flex items-center justify-center text-[24px] flex-shrink-0">
-                  {item.emoji}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-semibold text-white/80 truncate">{item.name}</p>
-                  <p className="text-[11px] text-white/25 mb-2">
-                    {Object.values(item.options).filter(Boolean).join(' · ') || 'No modifications'}
-                  </p>
-                  <div className="flex items-center border border-white/[0.08] rounded-[10px] w-fit overflow-hidden bg-white/[0.02]">
-                    <button onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                      className="w-[30px] h-7 hover:bg-white/5 flex items-center justify-center text-white/35 text-sm transition-colors">−</button>
-                    <span className="w-7 h-7 flex items-center justify-center text-[13px] font-semibold text-white/70 border-x border-white/[0.07]">
-                      {item.quantity}
-                    </span>
-                    <button onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                      className="w-[30px] h-7 hover:bg-orange-500/10 flex items-center justify-center text-orange-400 text-sm transition-colors">+</button>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <span className="text-[15px] font-bold text-orange-400">
-                    {formatPrice(item.price * item.quantity)}
-                  </span>
-                  <button onClick={() => removeItem(item.id)}
-                    className="w-7 h-7 rounded-[8px] bg-red-500/10 border border-red-500/15 flex items-center justify-center text-red-400 hover:bg-red-500/20 transition-all text-xs">✕</button>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* Order items */}
+        <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 10px' }}>Order Items</p>
 
-          <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2">Table & Session</p>
-          <div className="flex items-center gap-2.5 p-3 rounded-[14px] bg-orange-500/5 border border-orange-500/15 mb-4">
-            <div className="w-9 h-9 rounded-[10px] bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
-              <MapPin size={18} className="text-orange-400" />
-            </div>
-            <div className="flex-1">
-              <p className="text-[11px] text-white/25 uppercase tracking-widest">Dining at</p>
-              <p className="text-[14px] font-semibold text-white/80">
-                {tableNum ? `Table ${tableNum}` : tableId || 'Walk-in Guest'}
-              </p>
-              <p className="text-[11px] text-white/20 font-mono mt-0.5">{tableId}</p>
-            </div>
-            <span className="text-green-400 text-sm font-bold">✓</span>
-          </div>
-
-          <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2">Special Instructions</p>
-          <textarea
-            value={notes} onChange={e => setNotes(e.target.value)}
-            placeholder="Allergies, dietary needs, or special requests for the kitchen…"
-            rows={2}
-            className="w-full rounded-[14px] px-3 py-2.5 text-[13px] mb-4 resize-none bg-gray-900 border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-orange-500/40 transition"
-          />
-
-          <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2">Promo Code</p>
-          <div className="flex gap-2 mb-1">
-            <input
-              value={promo} onChange={e => setPromo(e.target.value)}
-              placeholder="Enter promo code"
-              className="flex-1 h-11 px-3 rounded-xl bg-gray-900 border border-white/[0.08] text-white text-[13px] placeholder-white/20 focus:outline-none focus:border-orange-500/40 transition"
-            />
-            <button onClick={applyPromo}
-              className="h-11 px-4 rounded-xl bg-orange-500/10 border border-orange-500/25 text-[13px] font-semibold text-orange-400 hover:bg-orange-500/20 transition-all whitespace-nowrap">
-              Apply
+        {items.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '48px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 48, opacity: 0.2 }}>🛒</span>
+            <p style={{ color: C.subtle, fontSize: 14, margin: 0 }}>Your cart is empty</p>
+            <button onClick={() => router.push('/guest/menu')}
+              style={{ padding: '10px 24px', borderRadius: 24, background: '#FFF3E0', border: `1.5px solid #FED7AA`, color: C.red, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              Browse Menu
             </button>
           </div>
-          {promoApplied && (
-            <div className="flex items-center gap-1.5 text-[12px] text-green-400 mb-3">
-              <Tag size={13} /> HAPPY20 applied — 10% discount
-            </div>
-          )}
+        )}
 
-          <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2 mt-2">Bill Summary</p>
-          <div className="bg-gray-900 border border-white/[0.07] rounded-2xl p-4 mb-4">
-            {items.map(item => (
-              <div key={item.id} className="flex justify-between py-1">
-                <span className="text-[13px] text-white/30">{item.name} × {item.quantity}</span>
-                <span className="text-[13px] text-white/50">{formatPrice(item.price * item.quantity)}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+          {items.map(item => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px', background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 16, boxShadow: '0 2px 8px rgba(137,28,28,0.04)' }}>
+              {/* Emoji */}
+              <div style={{ width: 54, height: 54, borderRadius: 14, background: '#FFF3E0', border: '1.5px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, flexShrink: 0 }}>
+                {item.emoji}
               </div>
-            ))}
-            <div className="h-px bg-white/[0.06] my-2.5" />
-            <div className="flex justify-between py-1">
-              <span className="text-[13px] text-white/30">Subtotal</span>
-              <span className="text-[13px] text-white/50">{formatPrice(subtotal())}</span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span className="text-[13px] text-white/30">Service Charge (5%)</span>
-              <span className="text-[13px] text-white/50">{formatPrice(serviceCharge())}</span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span className="text-[13px] text-white/30">Tax (15%)</span>
-              <span className="text-[13px] text-white/50">{formatPrice(tax())}</span>
-            </div>
-            {promoApplied && (
-              <div className="flex justify-between py-1">
-                <span className="text-[13px] text-white/30">Promo Discount</span>
-                <span className="text-[13px] text-green-400">− {formatPrice(discount)}</span>
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: '0 0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
+                <p style={{ fontSize: 11, color: C.subtle, margin: '0 0 10px' }}>{Object.values(item.options).filter(Boolean).join(' · ') || 'No modifications'}</p>
+                {/* Qty stepper */}
+                <div style={{ display: 'flex', alignItems: 'center', border: `1.5px solid ${C.red}`, borderRadius: 10, width: 'fit-content', overflow: 'hidden' }}>
+                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)} style={{ width: 32, height: 30, background: 'none', border: 'none', color: C.red, fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>−</button>
+                  <span style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: C.text, borderLeft: `1px solid #FED7AA`, borderRight: `1px solid #FED7AA` }}>{item.quantity}</span>
+                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)} style={{ width: 32, height: 30, background: 'none', border: 'none', color: C.red, fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>+</button>
+                </div>
               </div>
-            )}
-            <div className="h-px bg-white/[0.06] my-2.5" />
-            <div className="flex justify-between items-center">
-              <span className="text-[15px] font-semibold text-white/70">Total</span>
-              <span className="text-[20px] font-bold text-orange-400">{formatPrice(grandTotal)}</span>
+              {/* Price + remove */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: C.red }}>{formatPrice(item.price * item.quantity)}</span>
+                <button onClick={() => removeItem(item.id)}
+                  style={{ width: 28, height: 28, borderRadius: 8, background: '#FFF0F0', border: '1px solid #FFD0D0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, color: C.red }}>✕</button>
+              </div>
             </div>
-          </div>
-
-          {orderError && (
-            <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 mb-4">
-              <AlertCircle size={15} className="text-red-400 flex-shrink-0" />
-              <p className="text-[12px] text-red-300 leading-relaxed">{orderError}</p>
-            </div>
-          )}
-          <div className="h-4" />
+          ))}
         </div>
 
-        <div className="px-5 pt-3.5 pb-7 border-t border-white/[0.06] bg-gray-950">
-          <button
-            onClick={placeOrder}
-            disabled={placing || items.length === 0}
-            className="w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[15px] font-bold mb-2.5 transition-all bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25 disabled:opacity-40 disabled:cursor-not-allowed">
-            {placing
-              ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              : <><Send size={18} /> Place Order · {formatPrice(grandTotal)}</>}
-          </button>
-          <div className="flex items-center justify-center gap-1.5">
-            <Lock size={12} className="text-white/15" />
-            <span className="text-[11px] text-white/15">Secured guest session · No payment required now</span>
+        {/* Table info */}
+        <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 8px' }}>Table & Session</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#FFF3E0', border: `1.5px solid #FED7AA`, borderRadius: 14, marginBottom: 16 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <MapPin size={18} color={C.red} />
           </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, margin: '0 0 2px' }}>Dining at</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: 0 }}>{tableNum ? `Table ${tableNum}` : tableId || 'Walk-in Guest'}</p>
+          </div>
+          <span style={{ color: '#22c55e', fontSize: 18, fontWeight: 800 }}>✓</span>
+        </div>
+
+        {/* Special instructions */}
+        <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 8px' }}>Special Instructions</p>
+        <textarea
+          value={notes} onChange={e => setNotes(e.target.value)}
+          placeholder="Allergies, dietary needs, special requests…"
+          rows={2}
+          style={{ width: '100%', borderRadius: 14, padding: '12px 14px', fontSize: 13, marginBottom: 16, resize: 'none', background: C.white, border: `1.5px solid ${C.border}`, color: C.text, outline: 'none', fontFamily: 'sans-serif', boxSizing: 'border-box' }} />
+
+        {/* Promo */}
+        <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 8px' }}>Promo Code</p>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+          <input value={promo} onChange={e => setPromo(e.target.value)} placeholder="Enter promo code"
+            style={{ flex: 1, height: 44, borderRadius: 12, padding: '0 14px', background: C.white, border: `1.5px solid ${C.border}`, fontSize: 13, color: C.text, outline: 'none' }} />
+          <button onClick={applyPromo}
+            style={{ height: 44, padding: '0 18px', borderRadius: 12, background: '#FFF3E0', border: `1.5px solid #FED7AA`, color: C.red, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            Apply
+          </button>
+        </div>
+        {promoApplied && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#16a34a', fontSize: 12, marginBottom: 12 }}>
+            <Tag size={13} /> HAPPY20 applied — 10% discount
+          </div>
+        )}
+
+        {/* Bill summary */}
+        <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '16px 0 8px' }}>Bill Summary</p>
+        <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 16, padding: '16px', marginBottom: 12 }}>
+          {items.map(item => (
+            <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+              <span style={{ fontSize: 13, color: C.muted }}>{item.name} × {item.quantity}</span>
+              <span style={{ fontSize: 13, color: C.muted }}>{formatPrice(item.price * item.quantity)}</span>
+            </div>
+          ))}
+          <div style={{ height: 1, background: C.border, margin: '10px 0' }} />
+          {[
+            ['Subtotal',            formatPrice(subtotal())],
+            ['Service Charge (5%)', formatPrice(serviceCharge())],
+            ['Tax (15%)',           formatPrice(tax())],
+          ].map(([l, v]) => (
+            <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+              <span style={{ fontSize: 13, color: C.muted }}>{l}</span>
+              <span style={{ fontSize: 13, color: C.muted }}>{v}</span>
+            </div>
+          ))}
+          {promoApplied && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+              <span style={{ fontSize: 13, color: C.muted }}>Promo Discount</span>
+              <span style={{ fontSize: 13, color: '#16a34a', fontWeight: 700 }}>− {formatPrice(discount)}</span>
+            </div>
+          )}
+          <div style={{ height: 1, background: C.border, margin: '10px 0' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Total</span>
+            <span style={{ fontSize: 22, fontWeight: 900, color: C.red, fontFamily: 'Georgia, serif' }}>{formatPrice(grandTotal)}</span>
+          </div>
+        </div>
+
+        {/* Error */}
+        {orderError && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: '#FFF0F0', border: '1px solid #FFD0D0', borderRadius: 12, marginBottom: 12 }}>
+            <AlertCircle size={15} color={C.red} />
+            <p style={{ fontSize: 12, color: C.red, margin: 0 }}>{orderError}</p>
+          </div>
+        )}
+        <div style={{ height: 16 }} />
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: '14px 20px 28px', background: C.white, borderTop: `1.5px solid ${C.border}` }}>
+        <button
+          onClick={placeOrder}
+          disabled={placing || items.length === 0}
+          style={{ width: '100%', height: 56, borderRadius: 28, border: 'none', cursor: placing || items.length === 0 ? 'not-allowed' : 'pointer', fontSize: 16, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: placing || items.length === 0 ? '#ccc' : C.red, color: '#fff', boxShadow: placing || items.length === 0 ? 'none' : '0 6px 20px rgba(225,37,27,0.35)', marginBottom: 10 }}>
+          {placing
+            ? <><div style={{ width: 18, height: 18, border: '2.5px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /></>
+            : <><Send size={18} /> Place Order · {formatPrice(grandTotal)}</>}
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Lock size={12} color={C.subtle} />
+          <span style={{ fontSize: 11, color: C.subtle }}>Secured guest session · No payment required now</span>
         </div>
       </div>
-    </main>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
   );
 }

@@ -26,9 +26,11 @@ const NAV = [
   ]},
 ];
 
+const C = { red: '#E1251B', dark: '#891C1C', gold: '#FFC72C', bg: '#FFF8F1', white: '#fff', border: '#F0E8E0', text: '#1A1A1A', muted: '#687780', subtle: '#9CA3AF' };
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const router   = useRouter();
+  const pathname  = usePathname();
+  const router    = useRouter();
   const { user, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -38,55 +40,50 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     router.push('/login/admin');
   }
 
-  const displayName = user?.displayName || user?.email?.split('@')[0] || 'Admin'
-  const initials    = displayName.slice(0, 2).toUpperCase()
-  const roleLabel   = user?.groups?.includes('menulay_admin')  ? 'Super Admin' :
-                      user?.groups?.includes('menulay_tenant') ? user.tenantName || 'Tenant' :
-                      'User'
+  const displayName = user?.displayName || user?.email?.split('@')[0] || 'Admin';
+  const initials    = displayName.slice(0, 2).toUpperCase();
+  const roleLabel   = user?.groups?.includes('menulay_admin')  ? 'Super Admin'             :
+                      user?.groups?.includes('menulay_tenant') ? user.tenantName || 'Admin' :
+                      'Admin';
 
   return (
-    <div className="flex min-h-dvh bg-gray-950 font-sans">
+    <div style={{ display: 'flex', minHeight: '100dvh', background: C.bg, fontFamily: 'DM Sans, sans-serif' }}>
 
-      {/* ── Sidebar ── */}
-      <aside className="w-[220px] bg-gray-900 border-r border-white/[0.06] flex flex-col flex-shrink-0">
+      {/* ── Sidebar ───────────────────────────────────────────────────────── */}
+      <aside style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', background: C.white, borderRight: `1.5px solid ${C.border}`, boxShadow: '2px 0 8px rgba(137,28,28,0.04)' }}>
 
         {/* Logo */}
-        <div className="flex items-center gap-2.5 px-5 py-5 border-b border-white/[0.06]">
-          <div className="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-[16px]">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 20px', borderBottom: `1.5px solid ${C.border}` }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: `linear-gradient(135deg, ${C.dark}, #B22222)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
             🍽️
           </div>
           <div>
-            <p className="text-[16px] font-bold text-white leading-tight tracking-tight">
-              Menu<span className="text-orange-400">Lay</span>
-            </p>
-            <p className="text-[10px] text-white/20 uppercase tracking-widest">Admin Portal</p>
+            <p style={{ fontSize: 15, fontWeight: 800, color: C.text, fontFamily: 'Georgia, serif', margin: 0, lineHeight: 1.2 }}>Menulay</p>
+            <p style={{ fontSize: 9, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: 0 }}>Admin Portal</p>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
-          {NAV.map((group) => (
-            <div key={group.section} className="mb-4">
-              <p className="px-3 py-1.5 text-[10px] text-white/20 uppercase tracking-widest font-semibold">
+        <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
+          {NAV.map(group => (
+            <div key={group.section} style={{ marginBottom: 18 }}>
+              <p style={{ padding: '3px 10px 6px', fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: 0 }}>
                 {group.section}
               </p>
-              {group.items.map((item) => {
+              {group.items.map(item => {
                 const Icon   = item.icon;
                 const active = pathname === item.href ||
                   (item.href !== '/admin/dashboard' && pathname.startsWith(item.href));
                 return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium mb-0.5 transition-all ${
-                      active
-                        ? 'bg-orange-500/15 border border-orange-500/25 text-orange-400'
-                        : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04] border border-transparent'
-                    }`}
-                  >
-                    <Icon size={15} className={active ? 'text-orange-400' : 'text-white/30'} />
-                    <span className="flex-1">{item.label}</span>
-                    {active && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
+                  <Link key={item.label} href={item.href}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, marginBottom: 2, textDecoration: 'none', transition: 'all 0.15s', fontSize: 13, fontWeight: active ? 700 : 500,
+                      background: active ? '#FFF0EE' : 'transparent',
+                      border:     `1.5px solid ${active ? '#FED0CC' : 'transparent'}`,
+                      color:       active ? C.red : C.muted,
+                    }}>
+                    <Icon size={15} color={active ? C.red : C.subtle} />
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    {active && <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.red, flexShrink: 0 }} />}
                   </Link>
                 );
               })}
@@ -94,33 +91,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ))}
         </nav>
 
-        {/* User + Logout */}
-        <div className="px-3 pb-4 pt-3 border-t border-white/[0.06]">
-          <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-white/[0.03] transition-colors">
+        {/* User + logout */}
+        <div style={{ padding: '10px 10px 16px', borderTop: `1.5px solid ${C.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 12, background: C.bg }}>
             {/* Avatar */}
-            <div className="w-8 h-8 rounded-[10px] bg-orange-500/15 border border-orange-500/25 flex items-center justify-center text-[12px] font-bold text-orange-400 flex-shrink-0">
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: '#FFF3E0', border: `1.5px solid #FED7AA`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: C.dark, flexShrink: 0 }}>
               {initials}
             </div>
             {/* Info */}
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold text-white/70 truncate">{displayName}</p>
-              <p className="text-[10px] text-white/25">{roleLabel}</p>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: C.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
+              <p style={{ fontSize: 10, color: C.subtle, margin: 0 }}>{roleLabel}</p>
             </div>
             {/* Logout */}
             <button
               onClick={handleLogout}
               disabled={loggingOut}
               title="Sign out"
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-40"
-            >
-              <LogOut size={14} className={loggingOut ? 'animate-spin' : ''} />
+              style={{ width: 28, height: 28, borderRadius: 8, background: 'none', border: `1.5px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s', opacity: loggingOut ? 0.4 : 1 }}
+              onMouseEnter={e => { const b = e.currentTarget; b.style.background = '#FFF0F0'; b.style.borderColor = '#FFD0D0'; }}
+              onMouseLeave={e => { const b = e.currentTarget; b.style.background = 'none'; b.style.borderColor = C.border; }}>
+              <LogOut size={13} color={loggingOut ? C.subtle : C.muted} className={loggingOut ? 'animate-spin' : ''} />
             </button>
           </div>
         </div>
       </aside>
 
-      {/* ── Main content ── */}
-      <main className="flex-1 flex flex-col min-w-0 bg-gray-950">
+      {/* ── Main content ──────────────────────────────────────────────────── */}
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: C.bg }}>
         {children}
       </main>
     </div>

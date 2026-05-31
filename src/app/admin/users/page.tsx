@@ -1,221 +1,339 @@
 'use client';
 
-import { useState } from 'react';
-import { Edit2, Lock, X, ShieldCheck, ShieldX } from 'lucide-react';
-import { ADMIN_USERS } from '@/lib/data';
-import type { AdminUser, UserRole } from '@/lib/types';
+import { useState, useEffect, useCallback } from 'react';
+import { Edit2, Lock, X, ShieldCheck, ShieldX, RefreshCw, Plus, AlertCircle, CheckCircle, Search } from 'lucide-react';
 
-const ROLE_CFG: Record<UserRole, { label: string; bg: string; text: string; border: string; avatar: string }> = {
-  super:   { label: 'Super Admin',   bg: 'bg-orange-500/15', text: 'text-orange-400',  border: 'border-orange-500/25', avatar: 'bg-orange-500/15 text-orange-400'  },
-  manager: { label: 'Manager',       bg: 'bg-blue-500/10',   text: 'text-blue-400',    border: 'border-blue-500/20',   avatar: 'bg-blue-500/10 text-blue-400'     },
-  kitchen: { label: 'Kitchen Staff', bg: 'bg-purple-500/10', text: 'text-purple-400',  border: 'border-purple-500/20', avatar: 'bg-purple-500/10 text-purple-400' },
-};
+interface CognitoUser {
+  id: string; username: string; email: string; name: string;
+  role: string; tenantId: string; tenantName: string;
+  status: string; enabled: boolean; createdAt: string; updatedAt: string;
+  mfaEnabled: boolean; groups: string[];
+}
 
-const PERMS = [
-  'View Menu', 'Edit Menu', 'View Orders', 'Manage Users', 'QR Codes', 'Analytics',
-];
-const DEFAULT_PERMS_MANAGER = [true, true, true, false, true, false];
+const C = { red: '#E1251B', dark: '#891C1C', gold: '#FFC72C', bg: '#FFF8F1', white: '#fff', border: '#F0E8E0', text: '#1A1A1A', muted: '#687780', subtle: '#9CA3AF' };
+
+const PERMS = ['View Menu', 'Edit Menu', 'View Orders', 'Manage Users', 'QR Codes', 'Analytics'];
+const DEFAULT_PERMS = [true, true, true, false, true, false];
+
+function getRoleCfg(role: string): { label: string; bg: string; color: string; border: string; initBg: string } {
+  if (role === 'super_admin' || role === 'menulay_admin')
+    return { label: 'Super Admin',   bg: '#FFF3E0', color: '#c2410c', border: '#FED7AA', initBg: '#FFF3E0' };
+  if (role === 'manager')
+    return { label: 'Manager',       bg: '#EFF6FF', color: '#1d4ed8', border: '#BFDBFE', initBg: '#EFF6FF' };
+  if (role === 'kitchen' || role === 'kds')
+    return { label: 'Kitchen Staff', bg: '#FAF5FF', color: '#7c3aed', border: '#DDD6FE', initBg: '#FAF5FF' };
+  return   { label: role || 'Admin', bg: '#F0FFF4', color: '#16a34a', border: '#BBF7D0', initBg: '#F0FFF4' };
+}
+
+function initials(name: string): string {
+  return name.split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase() || 'U';
+}
+
+function formatDate(iso?: string): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export default function AdminUsersPage() {
-  const [users,  setUsers]  = useState<AdminUser[]>(ADMIN_USERS);
-  const [modal,  setModal]  = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved,  setSaved]  = useState(false);
-  const [perms,  setPerms]  = useState(DEFAULT_PERMS_MANAGER);
+  const [users,   setUsers]   = useState<CognitoUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+  const [search,  setSearch]  = useState('');
+  const [modal,   setModal]   = useState(false);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
+  const [perms,   setPerms]   = useState(DEFAULT_PERMS);
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'manager' });
 
-  const togglePerm = (i: number) =>
-    setPerms(p => p.map((v, idx) => idx === i ? !v : v));
+  const [apiNote, setApiNote] = useState('');
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('dp_access') ?? localStorage.getItem('dp_id') ?? '')
+        : '';
+      const res = await fetch('/api/admin/users', {
+        headers: { Authorization: token },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? `API ${res.status}`);
+      }
+      const data = await res.json();
+      setUsers(data.users ?? []);
+      if (data.note) setApiNote(data.note);
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to load users.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+
+  const filtered = users.filter(u =>
+    search === '' ||
+    u.name.toLowerCase().includes(search.toLowerCase()) ||
+    u.email.toLowerCase().includes(search.toLowerCase()) ||
+    u.role.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const stats = [
+    { label: 'Total Users',  val: users.length,                              color: C.text    },
+    { label: 'Enabled',      val: users.filter(u => u.enabled).length,       color: '#16a34a' },
+    { label: 'MFA Enabled',  val: users.filter(u => u.mfaEnabled).length,    color: C.red     },
+    { label: 'Confirmed',    val: users.filter(u => u.status === 'CONFIRMED').length, color: '#d97706' },
+  ];
+
+  const togglePerm = (i: number) => setPerms(p => p.map((v, idx) => idx === i ? !v : v));
 
   const saveUser = async () => {
+    if (!newUser.name.trim() || !newUser.email.trim()) return;
     setSaving(true);
     await new Promise(r => setTimeout(r, 1000));
     setSaving(false); setSaved(true);
-    setTimeout(() => { setModal(false); setSaved(false); }, 900);
+    setTimeout(() => { setModal(false); setSaved(false); setNewUser({ name: '', email: '', role: 'manager' }); setPerms(DEFAULT_PERMS); }, 900);
   };
 
-  const STATS = [
-    { label: 'Total Users', val: users.length,                                sub: 'Across all roles',     color: 'text-white'      },
-    { label: 'Active Now',  val: users.filter(u => u.isOnline).length,        sub: 'Online this session',  color: 'text-green-400'  },
-    { label: 'MFA Enabled', val: users.filter(u => u.mfaEnabled).length,      sub: `${Math.round(users.filter(u => u.mfaEnabled).length / users.length * 100)}% coverage`, color: 'text-orange-400' },
-  ];
+  const inputStyle: React.CSSProperties = { width: '100%', height: 42, borderRadius: 10, padding: '0 12px', background: C.bg, border: `1.5px solid ${C.border}`, fontSize: 13, color: C.text, outline: 'none', boxSizing: 'border-box', fontFamily: 'sans-serif' };
 
   return (
     <>
-      {/* ── Top bar ── */}
-      <div className="flex items-center justify-between px-8 py-5 border-b border-white/[0.06] bg-gray-950">
+      {/* ── Top bar ───────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', background: C.white, borderBottom: `1.5px solid ${C.border}`, flexShrink: 0 }}>
         <div>
-          <h1 className="text-[22px] font-bold text-white tracking-tight">User Management</h1>
-          <p className="text-[12px] text-white/30 mt-0.5">Role-based access control · Super Admin &amp; Manager permissions</p>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: 0, fontFamily: 'Georgia, serif' }}>User Management</h1>
+          <p style={{ fontSize: 12, color: C.muted, margin: '2px 0 0' }}>Cognito User Pool · Role-based access control</p>
         </div>
-        <button
-          onClick={() => { setModal(true); setSaved(false); setPerms(DEFAULT_PERMS_MANAGER); }}
-          className="h-9 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[13px] font-semibold flex items-center gap-1.5 transition-all shadow-lg shadow-orange-500/25">
-          + Add User
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Search */}
+          <div style={{ position: 'relative' }}>
+            <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: C.subtle, pointerEvents: 'none' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users…"
+              style={{ height: 36, paddingLeft: 36, paddingRight: 14, borderRadius: 10, width: 200, fontSize: 13, background: C.bg, border: `1.5px solid ${C.border}`, color: C.text, outline: 'none' }}
+              onFocus={e => (e.target as HTMLInputElement).style.borderColor = C.red}
+              onBlur={e  => (e.target as HTMLInputElement).style.borderColor = C.border}
+            />
+          </div>
+          <button onClick={loadUsers} title="Refresh"
+            style={{ width: 36, height: 36, borderRadius: 10, background: '#FFF3E0', border: '1.5px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <RefreshCw size={14} color={C.dark} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={() => { setModal(true); setSaved(false); setPerms(DEFAULT_PERMS); setNewUser({ name: '', email: '', role: 'manager' }); }}
+            style={{ height: 36, padding: '0 16px', borderRadius: 10, background: C.red, color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', boxShadow: '0 4px 12px rgba(225,37,27,0.25)' }}>
+            <Plus size={15} /> Add User
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 p-8 overflow-y-auto bg-gray-950 space-y-6">
+      <div style={{ flex: 1, padding: '24px 32px', overflowY: 'auto', background: C.bg, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          {STATS.map(s => (
-            <div key={s.label} className="bg-gray-900 border border-white/[0.07] rounded-2xl px-5 py-4">
-              <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-3">{s.label}</p>
-              <p className={`text-[26px] font-bold ${s.color} leading-none`}>{s.val}</p>
-              <p className="text-[11px] text-white/20 mt-1.5">{s.sub}</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+          {stats.map(s => (
+            <div key={s.label} style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 16, padding: 16 }}>
+              <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 10px' }}>{s.label}</p>
+              <p style={{ fontSize: 28, fontWeight: 800, color: s.color, fontFamily: 'Georgia, serif', margin: 0, lineHeight: 1 }}>
+                {loading ? '…' : s.val}
+              </p>
             </div>
           ))}
         </div>
 
-        {/* User table */}
-        <div className="bg-gray-900 border border-white/[0.07] rounded-2xl overflow-hidden">
-          {/* Header */}
-          <div className="grid gap-3 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]"
-            style={{ gridTemplateColumns: '200px 110px 110px 110px 1fr 90px' }}>
-            {['User', 'Role', 'MFA', 'Status', 'Last Login', 'Actions'].map(h => (
-              <p key={h} className="text-[10px] text-white/25 uppercase tracking-widest font-semibold">{h}</p>
+        {/* Error */}
+        {error && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: '#FFF0F0', border: '1.5px solid #FFD0D0', borderRadius: 14 }}>
+            <AlertCircle size={16} color={C.red} style={{ flexShrink: 0 }} />
+            <p style={{ fontSize: 13, color: C.red, flex: 1, margin: 0 }}>{error}</p>
+            <button onClick={loadUsers} style={{ padding: '6px 14px', borderRadius: 8, background: '#FFF0F0', border: '1px solid #FFD0D0', color: C.red, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Retry</button>
+          </div>
+        )}
+
+        {/* API info note */}
+        {apiNote && !error && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 12 }}>
+            <span style={{ fontSize: 14 }}>ℹ️</span>
+            <p style={{ fontSize: 12, color: '#92400e', margin: 0 }}>{apiNote}</p>
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: '1px solid #F9FAFB' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: '#F0E8E0', flexShrink: 0 }} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ height: 10, width: '25%', background: '#F0E8E0', borderRadius: 6 }} />
+                  <div style={{ height: 8, width: '35%', background: '#F0E8E0', borderRadius: 6 }} />
+                </div>
+                <div style={{ width: 80, height: 24, background: '#F0E8E0', borderRadius: 20 }} />
+                <div style={{ width: 60, height: 24, background: '#F0E8E0', borderRadius: 20 }} />
+              </div>
             ))}
           </div>
+        )}
 
-          {/* Rows */}
-          {users.map(user => {
-            const role = ROLE_CFG[user.role];
-            return (
-              <div key={user.id}
-                className="grid gap-3 px-5 py-3.5 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02] transition-colors"
-                style={{ gridTemplateColumns: '200px 110px 110px 110px 1fr 90px' }}>
+        {/* Empty */}
+        {!loading && filtered.length === 0 && !error && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', gap: 12, border: `2px dashed ${C.border}`, borderRadius: 20, background: C.white }}>
+            <span style={{ fontSize: 36, opacity: 0.2 }}>👤</span>
+            <p style={{ fontSize: 13, color: C.subtle, margin: 0 }}>{search ? 'No users match your search' : 'No users found in Cognito pool'}</p>
+          </div>
+        )}
 
-                {/* Name + Avatar */}
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center text-[12px] font-bold flex-shrink-0 ${role.avatar}`}>
-                    {user.initials}
+        {/* Table */}
+        {!loading && filtered.length > 0 && (
+          <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 8px rgba(137,28,28,0.05)' }}>
+            {/* Header */}
+            <div style={{ display: 'grid', gridTemplateColumns: '220px 120px 90px 100px 1fr 90px', gap: 12, padding: '10px 20px', borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
+              {['User', 'Role', 'MFA', 'Status', 'Created', 'Actions'].map(h => (
+                <p key={h} style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: 0 }}>{h}</p>
+              ))}
+            </div>
+
+            {filtered.map(user => {
+              const cfg = getRoleCfg(user.role);
+              const ini = initials(user.name);
+              return (
+                <div key={user.id}
+                  style={{ display: 'grid', gridTemplateColumns: '220px 120px 90px 100px 1fr 90px', gap: 12, padding: '12px 20px', borderBottom: '1px solid #F9FAFB', alignItems: 'center', transition: 'background 0.15s' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = C.bg}
+                  onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}>
+
+                  {/* Avatar + name */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 10, background: cfg.initBg, border: `1.5px solid ${cfg.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: cfg.color, flexShrink: 0 }}>
+                      {ini}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: C.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</p>
+                      <p style={{ fontSize: 11, color: C.subtle, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-white/80 truncate">{user.name}</p>
-                    <p className="text-[11px] text-white/25 truncate">{user.email}</p>
+
+                  {/* Role */}
+                  <span style={{ display: 'inline-flex', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                    {cfg.label}
+                  </span>
+
+                  {/* MFA */}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: user.mfaEnabled ? '#F0FFF4' : '#FFF0F0', color: user.mfaEnabled ? '#16a34a' : C.red, border: `1px solid ${user.mfaEnabled ? '#BBF7D0' : '#FFD0D0'}` }}>
+                    {user.mfaEnabled ? <ShieldCheck size={11} /> : <ShieldX size={11} />}
+                    {user.mfaEnabled ? 'On' : 'Off'}
+                  </span>
+
+                  {/* Status */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: user.enabled && user.status === 'CONFIRMED' ? '#22c55e' : user.status === 'FORCE_CHANGE_PASSWORD' ? '#f97316' : '#D1D5DB', display: 'inline-block' }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: user.enabled && user.status === 'CONFIRMED' ? '#16a34a' : user.status === 'FORCE_CHANGE_PASSWORD' ? '#c2410c' : C.subtle }}>
+                      {user.status === 'CONFIRMED' ? 'Active' : user.status === 'FORCE_CHANGE_PASSWORD' ? 'Pending' : user.status}
+                    </span>
+                  </div>
+
+                  {/* Created */}
+                  <p style={{ fontSize: 11, color: C.subtle, margin: 0 }}>{formatDate(user.createdAt)}</p>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button title="Edit user"
+                      style={{ width: 28, height: 28, borderRadius: 8, background: '#FFF3E0', border: '1px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <Edit2 size={12} color={C.dark} />
+                    </button>
+                    <button title="Reset password"
+                      style={{ width: 28, height: 28, borderRadius: 8, background: '#FFF0F0', border: '1px solid #FFD0D0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <Lock size={12} color={C.red} />
+                    </button>
                   </div>
                 </div>
+              );
+            })}
 
-                {/* Role */}
-                <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border ${role.bg} ${role.text} ${role.border}`}>
-                  {role.label}
-                </span>
-
-                {/* MFA */}
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] border ${
-                  user.mfaEnabled
-                    ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                    : 'bg-red-500/10 border-red-500/20 text-red-400'
-                }`}>
-                  {user.mfaEnabled ? <ShieldCheck size={11} /> : <ShieldX size={11} />}
-                  {user.mfaEnabled ? 'On' : 'Off'}
-                </span>
-
-                {/* Status */}
-                <div className={`flex items-center gap-1.5 text-[12px] ${user.isOnline ? 'text-green-400' : 'text-white/25'}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${user.isOnline ? 'bg-green-400 animate-pulse' : 'bg-white/15'}`} />
-                  {user.isOnline ? 'Online' : 'Offline'}
-                </div>
-
-                {/* Last login */}
-                <p className="text-[11px] text-white/25">{user.lastLogin}</p>
-
-                {/* Actions */}
-                <div className="flex gap-1.5">
-                  <button className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:bg-orange-500/10 hover:border-orange-500/25 transition-all">
-                    <Edit2 size={12} className="text-white/35" />
-                  </button>
-                  <button className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:bg-orange-500/10 hover:border-orange-500/25 transition-all">
-                    <Lock size={12} className="text-white/35" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+            {/* Footer */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
+              <p style={{ fontSize: 11, color: C.subtle, margin: 0 }}>Showing {filtered.length} of {users.length} users</p>
+              <p style={{ fontSize: 11, color: '#D1D5DB', fontFamily: 'monospace', margin: 0 }}>Source: AWS Cognito User Pool</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ── Create User Modal ── */}
+      {/* ── Create User Modal ──────────────────────────────────────────────── */}
       {modal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 24 }}
           onClick={e => e.target === e.currentTarget && setModal(false)}>
-          <div className="bg-gray-900 border border-white/[0.07] rounded-3xl w-[400px] p-6 shadow-2xl">
+          <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 24, width: 420, padding: 24, boxShadow: '0 20px 60px rgba(137,28,28,0.15)' }}>
 
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-[18px] font-bold text-white">Create New User</h2>
-              <button onClick={() => setModal(false)}
-                className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all">
-                <X size={14} className="text-white/50" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: 0, fontFamily: 'Georgia, serif' }}>Create New User</h2>
+              <button onClick={() => setModal(false)} style={{ width: 32, height: 32, borderRadius: 10, background: C.bg, border: `1.5px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <X size={14} color={C.muted} />
               </button>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-[11px] text-white/30 uppercase tracking-widest font-semibold mb-1.5">Full Name</label>
-              <input
-                placeholder="e.g. Ahmed Raza"
-                className="w-full h-10 px-3 rounded-xl bg-gray-800 border border-white/10 text-white text-[13px] placeholder-white/20 focus:outline-none focus:border-orange-500/50 transition"
-              />
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 11, color: C.subtle, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6 }}>Full Name</label>
+              <input value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Ahmed Raza" style={inputStyle}
+                onFocus={e => (e.target as HTMLInputElement).style.borderColor = C.red}
+                onBlur={e  => (e.target as HTMLInputElement).style.borderColor = C.border} />
             </div>
 
-            <div className="mb-4">
-              <label className="block text-[11px] text-white/30 uppercase tracking-widest font-semibold mb-1.5">Email Address</label>
-              <input
-                type="email"
-                placeholder="e.g. ahmed@restaurant.com"
-                className="w-full h-10 px-3 rounded-xl bg-gray-800 border border-white/10 text-white text-[13px] placeholder-white/20 focus:outline-none focus:border-orange-500/50 transition"
-              />
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 11, color: C.subtle, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6 }}>Email Address</label>
+              <input type="email" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} placeholder="ahmed@daspardes.com" style={inputStyle}
+                onFocus={e => (e.target as HTMLInputElement).style.borderColor = C.red}
+                onBlur={e  => (e.target as HTMLInputElement).style.borderColor = C.border} />
             </div>
 
-            <div className="mb-4">
-              <label className="block text-[11px] text-white/30 uppercase tracking-widest font-semibold mb-1.5">Role</label>
-              <select
-                className="w-full h-10 px-3 rounded-xl bg-gray-800 border border-white/10 text-white text-[13px] focus:outline-none focus:border-orange-500/50 transition appearance-none">
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 11, color: C.subtle, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6 }}>Role</label>
+              <select value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))} style={{ ...inputStyle, appearance: 'none' as any }}
+                onFocus={e => (e.target as HTMLSelectElement).style.borderColor = C.red}
+                onBlur={e  => (e.target as HTMLSelectElement).style.borderColor = C.border}>
                 <option value="manager">Manager</option>
                 <option value="kitchen">Kitchen Staff</option>
               </select>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-[11px] text-white/30 uppercase tracking-widest font-semibold mb-2">Permissions</label>
-              <div className="grid grid-cols-2 gap-2">
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 11, color: C.subtle, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Permissions</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {PERMS.map((perm, i) => (
-                  <div key={perm}
-                    className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                      perms[i]
-                        ? 'bg-orange-500/10 border-orange-500/25'
-                        : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.05]'
-                    }`}
-                    onClick={() => togglePerm(i)}>
-                    <div className={`w-4 h-4 rounded-[5px] border flex items-center justify-center flex-shrink-0 transition-all ${
-                      perms[i] ? 'bg-orange-500 border-orange-500' : 'border-white/20'
-                    }`}>
-                      {perms[i] && <span className="text-white text-[10px] font-bold">✓</span>}
+                  <div key={perm} onClick={() => togglePerm(i)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 12, border: `1.5px solid ${perms[i] ? '#FED0CC' : C.border}`, background: perms[i] ? '#FFF0EE' : C.white, cursor: 'pointer', transition: 'all 0.2s' }}>
+                    <div style={{ width: 16, height: 16, borderRadius: 5, border: `1.5px solid ${perms[i] ? C.red : C.border}`, background: perms[i] ? C.red : C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>
+                      {perms[i] && <span style={{ color: '#fff', fontSize: 10, fontWeight: 800 }}>✓</span>}
                     </div>
-                    <span className={`text-[11px] font-medium ${perms[i] ? 'text-orange-300' : 'text-white/35'}`}>{perm}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: perms[i] ? C.red : C.muted }}>{perm}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="flex gap-2 mt-5">
+            <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setModal(false)}
-                className="flex-1 h-10 rounded-xl bg-white/5 border border-white/10 text-[13px] font-semibold text-white/40 hover:bg-white/10 hover:text-white/60 transition-all">
+                style={{ flex: 1, height: 42, borderRadius: 12, background: C.bg, border: `1.5px solid ${C.border}`, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button onClick={saveUser} disabled={saving}
-                className={`flex-[2] h-10 rounded-xl flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all ${
-                  saved
-                    ? 'bg-green-500/15 border border-green-500/30 text-green-400'
-                    : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25'
-                }`}>
+              <button onClick={saveUser} disabled={saving || !newUser.name.trim() || !newUser.email.trim()}
+                style={{ flex: 2, height: 42, borderRadius: 12, border: 'none', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', transition: 'all 0.2s',
+                  background: saved ? '#F0FFF4' : (!newUser.name.trim() || !newUser.email.trim() || saving) ? '#ccc' : C.red,
+                  color:      saved ? '#16a34a' : '#fff',
+                  border:     saved ? '1.5px solid #BBF7D0' : 'none',
+                  boxShadow:  saved || !newUser.name.trim() ? 'none' : '0 4px 12px rgba(225,37,27,0.25)',
+                }}>
                 {saving
-                  ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : saved ? '✓ User Created!' : '👤 Create User'}
+                  ? <><div style={{ width: 16, height: 16, border: '2.5px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /></>
+                  : saved ? <><CheckCircle size={15} /> User Created!</>
+                  : <>👤 Create User</>}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`.animate-spin{animation:spin 0.8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </>
   );
 }

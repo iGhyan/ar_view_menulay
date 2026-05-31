@@ -5,29 +5,9 @@ import Link from 'next/link';
 import { BookOpen, QrCode, Users, RefreshCw, AlertCircle, TrendingUp, ShoppingBag, Table2, DollarSign } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-interface LineItem {
-  name:                 string;
-  itemId:               string;
-  quantity:             number;
-  unitPriceMinorUnits:  number;
-  totalPriceMinorUnits: number;
-}
+interface LineItem { name: string; itemId: string; quantity: number; unitPriceMinorUnits: number; totalPriceMinorUnits: number; }
+interface ApiOrder { orderId: string; status: string; tableId?: string; lineItems: LineItem[]; placedAt?: string; updatedAt?: string; totalAmountMinorUnits?: number; currencyCode?: string; tenantId?: string; restaurantId?: string; }
 
-interface ApiOrder {
-  orderId:               string;
-  status:                string;
-  tableId?:              string;
-  lineItems:             LineItem[];
-  placedAt?:             string;
-  updatedAt?:            string;
-  totalAmountMinorUnits?: number;
-  currencyCode?:         string;
-  tenantId?:             string;
-  restaurantId?:         string;
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
 function toKds(status: string): 'new' | 'preparing' | 'ready' | 'delivered' {
   const s = status.toUpperCase();
   if (s === 'RECEIVED' || s === 'PENDING')      return 'new';
@@ -35,40 +15,26 @@ function toKds(status: string): 'new' | 'preparing' | 'ready' | 'delivered' {
   if (s === 'READY')                            return 'ready';
   return 'delivered';
 }
+function formatRs(minor: number)    { return 'Rs ' + (minor / 100).toLocaleString('en-PK'); }
+function formatTime(iso?: string)   { if (!iso) return '—'; return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); }
+function shortId(id: string)        { return `LM-${id.slice(0, 6).toUpperCase()}`; }
+function tableNum(t?: string)       { if (!t) return '??'; const n = t.replace(/[^0-9]/g, ''); return n ? n.padStart(2, '0') : t; }
 
-function formatRs(minorUnits: number): string {
-  return 'Rs ' + (minorUnits / 100).toLocaleString('en-PK');
-}
+const C = { red: '#E1251B', dark: '#891C1C', gold: '#FFC72C', bg: '#FFF8F1', white: '#fff', border: '#F0E8E0', text: '#1A1A1A', muted: '#687780', subtle: '#9CA3AF' };
 
-function formatTime(iso?: string): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-}
-
-function shortId(orderId: string): string {
-  return `LM-${orderId.slice(0, 6).toUpperCase()}`;
-}
-
-function tableNum(tableId?: string): string {
-  if (!tableId) return '??';
-  const n = tableId.replace(/[^0-9]/g, '');
-  return n ? n.padStart(2, '0') : tableId;
-}
-
-const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
-  new:       { bg: 'bg-orange-500/10', text: 'text-orange-400',  dot: 'bg-orange-400'  },
-  preparing: { bg: 'bg-blue-500/10',   text: 'text-blue-400',    dot: 'bg-blue-400'    },
-  ready:     { bg: 'bg-green-500/10',  text: 'text-green-400',   dot: 'bg-green-400'   },
-  delivered: { bg: 'bg-white/5',       text: 'text-white/30',    dot: 'bg-white/20'    },
+const STATUS_CHIP: Record<string, { bg: string; color: string; dot: string; border: string }> = {
+  new:       { bg: '#FFF3E0', color: '#c2410c', dot: '#f97316', border: '#FED7AA' },
+  preparing: { bg: '#EFF6FF', color: '#1d4ed8', dot: '#3b82f6', border: '#BFDBFE' },
+  ready:     { bg: '#F0FFF4', color: '#16a34a', dot: '#22c55e', border: '#BBF7D0' },
+  delivered: { bg: '#FAF5FF', color: '#7c3aed', dot: '#a855f7', border: '#DDD6FE' },
 };
 
 const QUICK_LINKS = [
-  { href: '/admin/menu',  label: 'Menu Management', icon: BookOpen, desc: 'Edit items, categories & pricing', accent: 'from-orange-500/20 to-orange-500/5',  border: 'border-orange-500/30', iconBg: 'bg-orange-500/15', iconColor: 'text-orange-400' },
-  { href: '/admin/qr',    label: 'QR Codes',         icon: QrCode,  desc: 'Generate & manage table QR codes', accent: 'from-white/10 to-white/5',            border: 'border-white/20',      iconBg: 'bg-white/10',      iconColor: 'text-white'      },
-  { href: '/admin/users', label: 'User Management',  icon: Users,   desc: 'Team members & access roles',      accent: 'from-orange-500/10 to-transparent',   border: 'border-orange-500/20', iconBg: 'bg-orange-500/10', iconColor: 'text-orange-300' },
+  { href: '/admin/menu',  label: 'Menu Management', icon: BookOpen, desc: 'Edit items, categories & pricing'  },
+  { href: '/admin/qr',    label: 'QR Codes',         icon: QrCode,  desc: 'Generate & manage table QR codes' },
+  { href: '/admin/users', label: 'User Management',  icon: Users,   desc: 'Team members & access roles'      },
 ];
 
-// ── Page ───────────────────────────────────────────────────────────────────────
 export default function AdminDashboardPage() {
   const { user } = useAuth();
   const [orders,   setOrders]   = useState<ApiOrder[]>([]);
@@ -77,111 +43,95 @@ export default function AdminDashboardPage() {
   const [lastSync, setLastSync] = useState('');
 
   const loadOrders = useCallback(async () => {
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
-      const res = await fetch('/api/orders', { cache: 'no-store' });
+      const res  = await fetch('/api/orders', { cache: 'no-store' });
       if (!res.ok) throw new Error(`API ${res.status}`);
       const data = await res.json();
       setOrders(data.orders ?? []);
       setLastSync(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }));
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to load orders');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: any) { setError(err?.message ?? 'Failed to load orders'); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadOrders(); }, [loadOrders]);
 
-  const totalRevenue  = orders.reduce((sum, o) => sum + (o.totalAmountMinorUnits ?? 0), 0);
+  const totalRevenue  = orders.reduce((s, o) => s + (o.totalAmountMinorUnits ?? 0), 0);
   const activeOrders  = orders.filter(o => toKds(o.status) !== 'delivered');
   const delivering    = orders.filter(o => toKds(o.status) === 'delivered').length;
   const avgOrderValue = orders.length > 0 ? Math.round(totalRevenue / orders.length) : 0;
   const activeTables  = new Set(activeOrders.map(o => o.tableId).filter(Boolean)).size;
+  const recentOrders  = [...orders].sort((a, b) => new Date(b.placedAt ?? 0).getTime() - new Date(a.placedAt ?? 0).getTime()).slice(0, 10);
+
+  const greeting = new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening';
+  const firstName = user?.displayName?.split(' ')[0] ?? 'Admin';
 
   const stats = [
-    { label: 'Total Revenue',   val: loading ? null : formatRs(totalRevenue),       delta: `${orders.length} orders`,         icon: DollarSign,  accent: 'text-orange-400', glow: 'shadow-orange-500/20' },
-    { label: 'Active Orders',   val: loading ? null : String(activeOrders.length),  delta: `${delivering} delivered`,         icon: ShoppingBag, accent: 'text-white',      glow: 'shadow-white/10'     },
-    { label: 'Active Tables',   val: loading ? null : String(activeTables),         delta: 'Tables with open orders',         icon: Table2,      accent: 'text-orange-300', glow: 'shadow-orange-400/10'},
-    { label: 'Avg Order Value', val: loading ? null : formatRs(avgOrderValue),      delta: `From ${orders.length} orders`,    icon: TrendingUp,  accent: 'text-orange-400', glow: 'shadow-orange-500/20'},
+    { label: 'Total Revenue',   val: loading ? null : formatRs(totalRevenue),      delta: `${orders.length} orders`,      icon: DollarSign,  accent: C.red     },
+    { label: 'Active Orders',   val: loading ? null : String(activeOrders.length), delta: `${delivering} delivered`,      icon: ShoppingBag, accent: '#1d4ed8'  },
+    { label: 'Active Tables',   val: loading ? null : String(activeTables),        delta: 'Tables with open orders',      icon: Table2,      accent: '#16a34a'  },
+    { label: 'Avg Order Value', val: loading ? null : formatRs(avgOrderValue),     delta: `From ${orders.length} orders`, icon: TrendingUp,  accent: '#d97706'  },
   ];
-
-  const recentOrders = [...orders]
-    .sort((a, b) => new Date(b.placedAt ?? 0).getTime() - new Date(a.placedAt ?? 0).getTime())
-    .slice(0, 10);
 
   return (
     <>
-      {/* ── Top bar ── */}
-      <div className="flex items-center justify-between px-8 py-5 border-b border-white/[0.06] bg-gray-950">
+      {/* ── Top bar ───────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 32px', background: C.white, borderBottom: `1.5px solid ${C.border}`, boxShadow: '0 1px 4px rgba(137,28,28,0.04)', flexShrink: 0 }}>
         <div>
-          <h1 className="text-[22px] font-bold text-white tracking-tight">
-            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
-            <span className="text-orange-400">{user?.displayName?.split(' ')[0] ?? 'Admin'}</span>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: 0, fontFamily: 'Georgia, serif' }}>
+            Good {greeting},{' '}
+            <span style={{ color: C.red }}>{firstName}</span>
           </h1>
-          <p className="text-[12px] text-white/30 mt-0.5">
+          <p style={{ fontSize: 12, color: C.muted, margin: '3px 0 0' }}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {lastSync && (
-            <span className="text-[11px] text-white/25 bg-white/5 px-3 py-1.5 rounded-full border border-white/[0.06]">
+            <span style={{ fontSize: 11, color: C.subtle, background: '#FFF3E0', border: '1px solid #FED7AA', borderRadius: 20, padding: '4px 12px' }}>
               Synced {lastSync}
             </span>
           )}
-          <button
-            onClick={loadOrders}
-            className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-orange-500/10 hover:border-orange-500/30 transition-all"
-            title="Refresh"
-          >
-            <RefreshCw size={14} className={`text-white/40 ${loading ? 'animate-spin text-orange-400' : ''}`} />
+          <button onClick={loadOrders} title="Refresh"
+            style={{ width: 36, height: 36, borderRadius: 10, background: '#FFF3E0', border: '1.5px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' }}>
+            <RefreshCw size={14} color={C.dark} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
-      <div className="flex-1 p-8 overflow-y-auto bg-gray-950 space-y-8">
+      {/* ── Scrollable content ────────────────────────────────────────────── */}
+      <div style={{ flex: 1, padding: '24px 32px', overflowY: 'auto', background: C.bg, display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-        {/* ── Error ── */}
+        {/* Error */}
         {error && (
-          <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl">
-            <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
-            <p className="text-[13px] text-red-300 flex-1">{error}</p>
-            <button onClick={loadOrders} className="text-[12px] text-red-400 font-semibold hover:text-red-300 transition-colors">
-              Retry
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: '#FFF0F0', border: '1.5px solid #FFD0D0', borderRadius: 14 }}>
+            <AlertCircle size={16} color={C.red} style={{ flexShrink: 0 }} />
+            <p style={{ fontSize: 13, color: C.red, flex: 1, margin: 0 }}>{error}</p>
+            <button onClick={loadOrders} style={{ fontSize: 12, color: C.red, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Retry</button>
           </div>
         )}
 
-        {/* ── Stats grid ── */}
-        <div className="grid grid-cols-4 gap-4">
-          {stats.map((s, i) => {
+        {/* ── Stats grid ──────────────────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+          {stats.map(s => {
             const Icon = s.icon;
             return (
-              <div
-                key={s.label}
-                className={`relative overflow-hidden bg-gray-900 border border-white/[0.07] rounded-2xl p-5 shadow-lg ${s.glow}`}
-                style={{ animationDelay: `${i * 80}ms` }}
-              >
-                {/* Subtle orange glow top-right */}
-                <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-orange-500/10 blur-2xl" />
-
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`w-9 h-9 rounded-xl bg-white/5 border border-white/[0.07] flex items-center justify-center`}>
-                    <Icon size={16} className={s.accent} />
-                  </div>
+              <div key={s.label} style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 18, padding: '20px', boxShadow: '0 2px 8px rgba(137,28,28,0.05)', position: 'relative', overflow: 'hidden' }}>
+                {/* Subtle warm glow */}
+                <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: `${s.accent}15`, pointerEvents: 'none' }} />
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: `${s.accent}15`, border: `1.5px solid ${s.accent}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                  <Icon size={16} color={s.accent} />
                 </div>
-
                 {loading ? (
-                  <div className="space-y-2">
-                    <div className="h-7 w-24 bg-white/5 rounded-lg animate-pulse" />
-                    <div className="h-3 w-16 bg-white/5 rounded animate-pulse" />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ height: 26, width: 100, background: '#F0E8E0', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                    <div style={{ height: 10, width: 70, background: '#F0E8E0', borderRadius: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
                   </div>
                 ) : (
                   <>
-                    <p className={`text-[24px] font-bold ${s.accent} leading-none mb-1`}>{s.val}</p>
-                    <p className="text-[11px] text-white/25 uppercase tracking-widest font-medium">{s.label}</p>
-                    <p className="text-[11px] text-white/20 mt-1">{s.delta}</p>
+                    <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 4px' }}>{s.label}</p>
+                    <p style={{ fontSize: 22, fontWeight: 800, color: C.text, fontFamily: 'Georgia, serif', margin: '0 0 4px', lineHeight: 1.2 }}>{s.val}</p>
+                    <p style={{ fontSize: 11, color: C.subtle, margin: 0 }}>{s.delta}</p>
                   </>
                 )}
               </div>
@@ -189,116 +139,98 @@ export default function AdminDashboardPage() {
           })}
         </div>
 
-        {/* ── Quick links ── */}
+        {/* ── Quick links ─────────────────────────────────────────────────── */}
         <div>
-          <p className="text-[11px] text-white/25 uppercase tracking-widest font-semibold mb-3">Quick Access</p>
-          <div className="grid grid-cols-3 gap-4">
+          <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 12px' }}>Quick Access</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
             {QUICK_LINKS.map(ql => {
               const Icon = ql.icon;
               return (
-                <Link
-                  key={ql.href}
-                  href={ql.href}
-                  className={`group relative overflow-hidden bg-gradient-to-br ${ql.accent} border ${ql.border} rounded-2xl p-5 hover:scale-[1.02] transition-all duration-200`}
-                >
-                  <div className={`w-10 h-10 rounded-xl ${ql.iconBg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                    <Icon size={18} className={ql.iconColor} />
+                <Link key={ql.href} href={ql.href} style={{ textDecoration: 'none' }}>
+                  <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 18, padding: '20px', cursor: 'pointer', transition: 'all 0.2s', position: 'relative', overflow: 'hidden' }}
+                    onMouseEnter={e => { const d = e.currentTarget as HTMLDivElement; d.style.borderColor = '#FED0CC'; d.style.boxShadow = '0 4px 20px rgba(225,37,27,0.1)'; d.style.transform = 'translateY(-1px)'; }}
+                    onMouseLeave={e => { const d = e.currentTarget as HTMLDivElement; d.style.borderColor = C.border; d.style.boxShadow = 'none'; d.style.transform = 'none'; }}>
+                    <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(225,37,27,0.05)', pointerEvents: 'none' }} />
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: '#FFF0EE', border: '1.5px solid #FED0CC', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                      <Icon size={20} color={C.red} />
+                    </div>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: '0 0 4px' }}>{ql.label}</p>
+                    <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>{ql.desc}</p>
+                    <div style={{ position: 'absolute', bottom: 16, right: 16, fontSize: 18, color: '#FED0CC' }}>→</div>
                   </div>
-                  <p className="text-[14px] font-semibold text-white mb-1">{ql.label}</p>
-                  <p className="text-[12px] text-white/40">{ql.desc}</p>
-                  <div className="absolute bottom-4 right-4 text-white/20 group-hover:text-white/40 transition-colors text-[18px]">→</div>
                 </Link>
               );
             })}
           </div>
         </div>
 
-        {/* ── Recent orders ── */}
+        {/* ── Recent orders ───────────────────────────────────────────────── */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] text-white/25 uppercase tracking-widest font-semibold">Recent Orders</p>
-            <Link href="/kds" className="text-[12px] text-orange-400 font-semibold hover:text-orange-300 transition-colors">
-              View KDS →
-            </Link>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <p style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: 0 }}>Recent Orders</p>
+            <Link href="/kds" style={{ fontSize: 12, color: C.red, fontWeight: 700, textDecoration: 'none' }}>View KDS →</Link>
           </div>
 
-          <div className="bg-gray-900 border border-white/[0.07] rounded-2xl overflow-hidden">
+          <div style={{ background: C.white, border: `1.5px solid ${C.border}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 2px 8px rgba(137,28,28,0.05)' }}>
             {/* Table header */}
-            <div
-              className="grid gap-3 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]"
-              style={{ gridTemplateColumns: '130px 80px 60px 120px 100px 80px' }}
-            >
+            <div style={{ display: 'grid', gridTemplateColumns: '130px 80px 60px 120px 110px 80px', gap: 12, padding: '10px 20px', borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
               {['Order ID', 'Table', 'Items', 'Total', 'Status', 'Time'].map(h => (
-                <p key={h} className="text-[10px] text-white/25 uppercase tracking-widest font-semibold">{h}</p>
+                <p key={h} style={{ fontSize: 10, color: C.subtle, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: 0 }}>{h}</p>
               ))}
             </div>
 
-            {/* Loading skeleton */}
+            {/* Loading skeletons */}
             {loading && Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="grid gap-3 px-5 py-4 border-b border-white/[0.04] last:border-0 items-center"
-                style={{ gridTemplateColumns: '130px 80px 60px 120px 100px 80px' }}
-              >
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '130px 80px 60px 120px 110px 80px', gap: 12, padding: '14px 20px', borderBottom: '1px solid #F9FAFB', alignItems: 'center' }}>
                 {Array.from({ length: 6 }).map((_, j) => (
-                  <div key={j} className="h-3 bg-white/5 rounded animate-pulse" />
+                  <div key={j} style={{ height: 10, background: '#F0E8E0', borderRadius: 6 }} />
                 ))}
               </div>
             ))}
 
-            {/* Empty state */}
+            {/* Empty */}
             {!loading && recentOrders.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <span className="text-4xl opacity-20">📋</span>
-                <p className="text-[13px] text-white/25">No orders yet</p>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 8 }}>
+                <span style={{ fontSize: 32, opacity: 0.2 }}>📋</span>
+                <p style={{ fontSize: 13, color: C.subtle, margin: 0 }}>No orders yet</p>
               </div>
             )}
 
             {/* Rows */}
-            {!loading && recentOrders.map((order, i) => {
-              const kds       = toKds(order.status);
-              const itemCount = order.lineItems?.length ?? 0;
-              const style     = STATUS_STYLES[kds];
+            {!loading && recentOrders.map(order => {
+              const kds  = toKds(order.status);
+              const chip = STATUS_CHIP[kds];
+              const cnt  = order.lineItems?.length ?? 0;
               return (
-                <div
-                  key={order.orderId}
-                  className="grid gap-3 px-5 py-3.5 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02] transition-colors"
-                  style={{ gridTemplateColumns: '130px 80px 60px 120px 100px 80px' }}
-                >
-                  <span className="font-mono text-[12px] text-orange-400 font-semibold">
-                    {shortId(order.orderId)}
-                  </span>
-                  <span className="text-[13px] text-white/50">
-                    Table {tableNum(order.tableId)}
-                  </span>
-                  <span className="text-[13px] text-white/40">
-                    {itemCount} item{itemCount !== 1 ? 's' : ''}
-                  </span>
-                  <span className="text-[13px] text-orange-300 font-semibold">
-                    {formatRs(order.totalAmountMinorUnits ?? 0)}
-                  </span>
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+                <div key={order.orderId}
+                  style={{ display: 'grid', gridTemplateColumns: '130px 80px 60px 120px 110px 80px', gap: 12, padding: '12px 20px', borderBottom: '1px solid #F9FAFB', alignItems: 'center', transition: 'background 0.15s', cursor: 'default' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = C.bg}
+                  onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 800, color: C.red }}>{shortId(order.orderId)}</span>
+                  <span style={{ fontSize: 13, color: C.muted }}>Table {tableNum(order.tableId)}</span>
+                  <span style={{ fontSize: 13, color: C.subtle }}>{cnt} item{cnt !== 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.dark, fontFamily: 'Georgia, serif' }}>{formatRs(order.totalAmountMinorUnits ?? 0)}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: chip.bg, color: chip.color, border: `1px solid ${chip.border}` }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: chip.dot, display: 'inline-block' }} />
                     {kds}
                   </span>
-                  <span className="text-[12px] text-white/30">{formatTime(order.placedAt)}</span>
+                  <span style={{ fontSize: 12, color: C.subtle }}>{formatTime(order.placedAt)}</span>
                 </div>
               );
             })}
 
             {/* Footer */}
             {!loading && orders.length > 0 && (
-              <div className="px-5 py-3 border-t border-white/[0.06] bg-white/[0.01] flex items-center justify-between">
-                <p className="text-[11px] text-white/20">
-                  Showing {recentOrders.length} of {orders.length} orders
-                </p>
-                <p className="text-[11px] text-white/15 font-mono">Source: AWS API Gateway</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
+                <p style={{ fontSize: 11, color: C.subtle, margin: 0 }}>Showing {recentOrders.length} of {orders.length} orders</p>
+                <p style={{ fontSize: 11, color: '#D1D5DB', fontFamily: 'monospace', margin: 0 }}>Source: AWS API Gateway</p>
               </div>
             )}
           </div>
         </div>
-
       </div>
+
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} } .animate-spin{animation:spin 0.8s linear infinite} @keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </>
   );
 }

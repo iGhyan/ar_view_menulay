@@ -1,14 +1,15 @@
 import type { Metadata, Viewport } from 'next';
+// @ts-ignore: Allow side-effect CSS import without type declarations
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Das Pardes — Digital Menu',
+  title: 'Menulay — Digital Menu',
   description: 'Fine dining experience — scan, order, track',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Das Pardes',
+    title: 'Menulay',
   },
 };
 
