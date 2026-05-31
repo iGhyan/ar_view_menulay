@@ -16,7 +16,7 @@ function GuestContent() {
   const tableNum = tid.replace(/^[Tt](?:able[-_]?)?/, '').replace(/\D/g, '') || '—';
 
   const [zone,           setZone]           = useState('Main Hall');
-  const [restaurantName, setRestaurantName] = useState('MenuLay');
+  const [restaurantName, setRestaurantName] = useState('Das Pardes');
   const [tagline,        setTagline]        = useState('Fine Dining Experience');
 
   useEffect(() => {
@@ -49,7 +49,7 @@ function GuestContent() {
   const menuUrl  = `/guest/menu?rid=${qrRid || MENU_RID}&tid=${tid}`;
 
   return (
-    <main style={{ minHeight: '100dvh', background: '#FFF8F1', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: '0 auto' }}>
+    <main style={{ minHeight: '100dvh', background: '#FFF8F1', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', maxWidth: 480, margin: '0 auto' }}>
 
       {/* ── Hero Banner ───────────────────────────────────────────────────── */}
       <div style={{ background: 'linear-gradient(160deg, #6B0F0F 0%, #891C1C 40%, #B22222 75%, #C0392B 100%)', padding: '0 0 32px', position: 'relative', overflow: 'hidden' }}>
@@ -94,7 +94,7 @@ function GuestContent() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: '5px 12px' }}>
               <Wifi size={13} color="rgba(255,255,255,0.7)" />
-              <span style={{ color: '#fff', fontSize: 12, fontWeight: 600 }}>menulay2024</span>
+              <span style={{ color: '#fff', fontSize: 12, fontWeight: 600 }}>DasPardes2024</span>
             </div>
           </div>
         </div>
@@ -194,7 +194,7 @@ function GuestContent() {
       </div>
 
       {/* ── Bottom nav ────────────────────────────────────────────────────── */}
-      <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '12px 0 24px', borderTop: '1px solid #F0E8E0', background: '#fff', marginTop: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '12px 0 24px', borderTop: '1px solid #F0E8E0', background: '#fff', marginTop: 24 }}>
         {[
           { icon: '🏠', label: 'Home',   href: '/guest',          active: true  },
           { icon: '📖', label: 'Menu',   href: menuUrl,                         },
