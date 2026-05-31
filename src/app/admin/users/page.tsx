@@ -317,7 +317,7 @@ export default function AdminUsersPage() {
                 Cancel
               </button>
               <button onClick={saveUser} disabled={saving || !newUser.name.trim() || !newUser.email.trim()}
-                style={{ flex: 2, height: 42, borderRadius: 12, border: 'none', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', transition: 'all 0.2s',
+                style={{ flex: 2, height: 42, borderRadius: 12, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', transition: 'all 0.2s',
                   background: saved ? '#F0FFF4' : (!newUser.name.trim() || !newUser.email.trim() || saving) ? '#ccc' : C.red,
                   color:      saved ? '#16a34a' : '#fff',
                   border:     saved ? '1.5px solid #BBF7D0' : 'none',
