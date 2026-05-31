@@ -16,7 +16,7 @@ function GuestContent() {
   const tableNum = tid.replace(/^[Tt](?:able[-_]?)?/, '').replace(/\D/g, '') || '—';
 
   const [zone,           setZone]           = useState('Main Hall');
-  const [restaurantName, setRestaurantName] = useState('Das Pardes');
+  const [restaurantName, setRestaurantName] = useState('Menulay');
   const [tagline,        setTagline]        = useState('Fine Dining Experience');
 
   useEffect(() => {
@@ -49,7 +49,7 @@ function GuestContent() {
   const menuUrl  = `/guest/menu?rid=${qrRid || MENU_RID}&tid=${tid}`;
 
   return (
-    <main style={{ minHeight: '100dvh', background: '#FFF8F1', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', maxWidth: 480, margin: '0 auto' }}>
+    <main style={{ minHeight: '100dvh', background: '#FFF8F1', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: '0 auto' }}>
 
       {/* ── Hero Banner ───────────────────────────────────────────────────── */}
       <div style={{ background: 'linear-gradient(160deg, #6B0F0F 0%, #891C1C 40%, #B22222 75%, #C0392B 100%)', padding: '0 0 32px', position: 'relative', overflow: 'hidden' }}>
