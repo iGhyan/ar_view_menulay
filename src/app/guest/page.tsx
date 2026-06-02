@@ -3,10 +3,14 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Search, ShoppingCart, Heart, User, Home, Compass, Loader2, MapPin, Wifi, Star, ChevronRight, Bell } from 'lucide-react';
+import { Search, ShoppingCart, User, Home, BookOpen, Clock, Loader2, MapPin, Star, ChevronRight, Bell, type LucideIcon } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { fetchMenuItems, normaliseItem, type ApiMenuItem } from '@/lib/menu-api';
 import { useCartStore } from '@/lib/store';
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  Home, Menu: BookOpen, Cart: ShoppingCart, Tracking: Clock, User,
+};
 
 const MENU_RID  = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID || process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
 const API_BASE  = process.env.NEXT_PUBLIC_API_BASE  || 'https://g1ou0w5x4m.execute-api.ap-south-1.amazonaws.com/dev';
@@ -33,7 +37,7 @@ function GuestContent() {
   const tid      = params.get('tid') || '';
   const tableNum = tid.replace(/^[Tt](?:able[-_]?)?/, '').replace(/\D/g, '') || '—';
 
-  const [restName,  setRestName]  = useState('Menulay');
+  const [restName,  setRestName]  = useState('Das Pardes');
   const [tagline,   setTagline]   = useState('Fine Dining Experience');
   const [zone,      setZone]      = useState('Main Hall');
   const [items,     setItems]     = useState<ApiMenuItem[]>([]);
@@ -219,17 +223,20 @@ function GuestContent() {
 
       {/* ── Bottom Nav ── */}
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, background: D.nav, borderTop: `1px solid ${D.border}`, padding: '10px 0 24px', display: 'flex', justifyContent: 'space-around', zIndex: 100 }}>
-        {[
-          { icon: Home,    label: 'Home',    href: `/guest?rid=${qrRid}&tid=${tid}`, active: true },
-          { icon: Compass, label: 'Explore', href: menuUrl },
-          { icon: Heart,   label: 'Saved',   href: menuUrl },
-          { icon: User,    label: 'Profile',  href: '/guest' },
-        ].map(n => (
-          <Link key={n.label} href={n.href} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, textDecoration: 'none', color: n.active ? '#E1251B' : D.sub }}>
-            <n.icon size={22} color={n.active ? '#E1251B' : D.sub} />
-            <span style={{ fontSize: 10, fontWeight: n.active ? 700 : 500 }}>{n.label}</span>
-          </Link>
-        ))}
+        {([
+          { icon: 'Home',     label: 'Home',   href: `/guest?rid=${qrRid}&tid=${tid}`, active: true },
+          { icon: 'Menu',     label: 'Menu',   href: menuUrl },
+          { icon: 'Cart',     label: 'Cart',   href: '/guest/cart' },
+          { icon: 'Tracking', label: 'Orders', href: '/guest/tracking' },
+        ] as { icon: string; label: string; href: string; active?: boolean }[]).map(n => {
+          const Icon = ICON_MAP[n.icon] ?? Home;
+          return (
+            <Link key={n.label} href={n.href} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, textDecoration: 'none', color: n.active ? '#E1251B' : D.sub }}>
+              <Icon size={22} color={n.active ? '#E1251B' : D.sub} />
+              <span style={{ fontSize: 10, fontWeight: n.active ? 700 : 500 }}>{n.label}</span>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

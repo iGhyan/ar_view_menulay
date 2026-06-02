@@ -105,7 +105,7 @@ export default function TrackingPage() {
             <p style={{ fontSize: 13, color: D.muted, margin: '0 0 24px', textAlign: 'center' }}>This action cannot be undone. Please contact staff if needed.</p>
             <div style={{ display: 'flex', gap: 12 }}>
               <button onClick={() => setShowCancel(false)} style={{ flex: 1, height: 48, borderRadius: 24, background: D.card2, border: `1.5px solid ${D.border}`, color: D.muted, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Keep Order</button>
-              <button onClick={() => setShowCancel(false)} style={{ flex: 1, height: 48, borderRadius: 24, background: '#E1251B', border: 'none', color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>Cancel Order</button>
+              <button onClick={() => { setShowCancel(false); router.push('/guest'); }} style={{ flex: 1, height: 48, borderRadius: 24, background: '#E1251B', border: 'none', color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>Cancel Order</button>
             </div>
           </div>
         </div>

@@ -2,10 +2,14 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Search, SlidersHorizontal, ShoppingCart, Heart, Home, Compass, User, Loader2, Plus, Check } from 'lucide-react';
+import { ArrowLeft, Search, ShoppingCart, Home, BookOpen, Clock, Loader2, Plus, Check, type LucideIcon } from 'lucide-react';
 import { fetchMenuItems, normaliseItem, type ApiMenuItem } from '@/lib/menu-api';
 import { useCartStore } from '@/lib/store';
 import { useTheme } from '@/hooks/useTheme';
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  Home, Menu: BookOpen, Cart: ShoppingCart, Tracking: Clock,
+};
 
 const CAT_EMOJI: Record<string, string> = { all:'🍽️', starters:'🥗', mains:'🍽️', desserts:'🍰', beverages:'🥤', drinks:'🥤', coffee:'☕', hot:'☕', iced:'🧊', pizza:'🍕', burgers:'🍔', pasta:'🍝', seafood:'🐟', grill:'🔥', other:'🍽️' };
 function getCatEmoji(cat: string) { const c = cat.toLowerCase(); for (const [k,v] of Object.entries(CAT_EMOJI)) if (c.includes(k)) return v; return '🍽️'; }
@@ -166,18 +170,21 @@ function MenuContent() {
 
       {/* ── Bottom Nav ── */}
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, background: D.nav, borderTop: `1px solid ${D.border}`, padding: '10px 0 24px', display: 'flex', justifyContent: 'space-around', zIndex: 100 }}>
-        {[
-          { icon: Home,    label: 'Home',    href: '/guest', active: false },
-          { icon: Compass, label: 'Explore', href: '#',      active: true  },
-          { icon: Heart,   label: 'Saved',   href: '#'                     },
-          { icon: User,    label: 'Profile', href: '#'                     },
-        ].map(n => (
-          <button key={n.label} onClick={() => n.href !== '#' && router.push(n.href)}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', color: n.active ? '#E1251B' : D.sub }}>
-            <n.icon size={22} color={n.active ? '#E1251B' : D.sub} />
-            <span style={{ fontSize: 10, fontWeight: n.active ? 700 : 500 }}>{n.label}</span>
-          </button>
-        ))}
+        {([
+          { icon: 'Home',     label: 'Home',   href: '/guest',           active: false },
+          { icon: 'Menu',     label: 'Menu',   href: menuUrl,            active: true  },
+          { icon: 'Cart',     label: 'Cart',   href: '/guest/cart'                     },
+          { icon: 'Tracking', label: 'Orders', href: '/guest/tracking'                 },
+        ] as { icon: string; label: string; href: string; active?: boolean }[]).map(n => {
+          const Icon = ICON_MAP[n.icon] ?? Home;
+          return (
+            <button key={n.label} onClick={() => router.push(n.href)}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', color: n.active ? '#E1251B' : D.sub }}>
+              <Icon size={22} color={n.active ? '#E1251B' : D.sub} />
+              <span style={{ fontSize: 10, fontWeight: n.active ? 700 : 500 }}>{n.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Sticky cart bar */}
