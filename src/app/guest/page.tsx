@@ -1,223 +1,246 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { MapPin, ShoppingCart, Leaf, Loader2, Wifi, Star, Clock, ChevronRight, UtensilsCrossed } from 'lucide-react';
+import { Search, ShoppingCart, Heart, User, Home, Compass, Loader2, MapPin, Wifi, Star, ChevronRight, Bell } from 'lucide-react';
+import { useTheme } from '@/hooks/useTheme';
+import { fetchMenuItems, normaliseItem, type ApiMenuItem } from '@/lib/menu-api';
+import { useCartStore } from '@/lib/store';
 
 const MENU_RID  = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID || process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
 const API_BASE  = process.env.NEXT_PUBLIC_API_BASE  || 'https://g1ou0w5x4m.execute-api.ap-south-1.amazonaws.com/dev';
 const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
+const CAT_EMOJI: Record<string, string> = {
+  all:'🍽️', starters:'🥗', mains:'🍽️', desserts:'🍰', beverages:'🥤',
+  drinks:'🥤', coffee:'☕', hot:'☕', iced:'🧊', pizza:'🍕',
+  burgers:'🍔', pasta:'🍝', seafood:'🐟', grill:'🔥', soup:'🍜',
+  bread:'🍞', cake:'🎂', other:'🍽️',
+};
+function getCatEmoji(cat: string) {
+  const c = cat.toLowerCase();
+  for (const [k,v] of Object.entries(CAT_EMOJI)) if (c.includes(k)) return v;
+  return '🍽️';
+}
+
 function GuestContent() {
   const params   = useSearchParams();
+  const router   = useRouter();
+  const { theme, toggle, isDark } = useTheme();
+
   const qrRid    = params.get('rid') || '';
   const tid      = params.get('tid') || '';
   const tableNum = tid.replace(/^[Tt](?:able[-_]?)?/, '').replace(/\D/g, '') || '—';
 
-  const [zone,           setZone]           = useState('Main Hall');
-  const [restaurantName, setRestaurantName] = useState('Menulay');
-  const [tagline,        setTagline]        = useState('Fine Dining Experience');
+  const [restName,  setRestName]  = useState('Menulay');
+  const [tagline,   setTagline]   = useState('Fine Dining Experience');
+  const [zone,      setZone]      = useState('Main Hall');
+  const [items,     setItems]     = useState<ApiMenuItem[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const { itemCount, addItem } = useCartStore();
+  const cartCount = itemCount();
 
   useEffect(() => {
     const n = parseInt(tableNum, 10);
-    if (n >= 9 && n <= 10)  setZone('Garden Terrace');
-    else if (n >= 11)        setZone('Private Dining');
-    else                     setZone('Main Hall');
-
-    if (qrRid)            sessionStorage.setItem('lm_rid',   qrRid);
-    if (tid)              sessionStorage.setItem('lm_tid',   tid);
+    setZone(n >= 11 ? 'Private Dining' : n >= 9 ? 'Garden Terrace' : 'Main Hall');
+    if (qrRid) sessionStorage.setItem('lm_rid', qrRid);
+    if (tid)   sessionStorage.setItem('lm_tid', tid);
     if (tableNum !== '—') sessionStorage.setItem('lm_table', tableNum);
 
-    const ridToUse = qrRid || MENU_RID;
-    fetch(`${API_BASE}/menus/restaurants/${ridToUse}/items`, {
-      headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': TENANT_ID },
-      cache: 'no-store',
+    const rid = qrRid || MENU_RID;
+    fetch(`${API_BASE}/menus/restaurants/${rid}/items`, {
+      headers: { 'Content-Type': 'application/json', 'X-Tenant-Id': TENANT_ID }, cache: 'no-store',
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        const items = data?.items ?? data ?? [];
-        if (items.length > 0) {
-          if (items[0]?.restaurantName)    setRestaurantName(items[0].restaurantName);
-          if (items[0]?.restaurantTagline) setTagline(items[0].restaurantTagline);
-        }
+        const raw = data?.items ?? data ?? [];
+        if (raw[0]?.restaurantName) setRestName(raw[0].restaurantName);
+        if (raw[0]?.restaurantTagline) setTagline(raw[0].restaurantTagline);
+        setItems(raw.map(normaliseItem));
+        setLoading(false);
       })
-      .catch(() => {});
+      .catch(() => setLoading(false));
   }, [qrRid, tid, tableNum]);
 
   const isQrScan = params.has('rid') && params.has('tid');
   const menuUrl  = `/guest/menu?rid=${qrRid || MENU_RID}&tid=${tid}`;
 
+  // Build categories from items
+  const cats = ['All', ...Array.from(new Set(items.map(i => i.category).filter(Boolean))).map(c => {
+    const isUuid = /^[0-9a-f]{6,}/i.test(c);
+    return isUuid ? 'Dishes' : c.charAt(0).toUpperCase() + c.slice(1);
+  })];
+
+  // Popular = first 4 items
+  const popular = items.filter(i => i.status !== 'inactive').slice(0, 4);
+
+  const D = isDark ? {
+    bg: '#111111', card: '#1C1C1C', card2: '#242424', border: 'rgba(255,255,255,0.08)',
+    text: '#F5F0E8', muted: '#9CA3AF', sub: '#6B7280', nav: '#181818',
+    input: '#222222', promo: '#1A2A1A',
+  } : {
+    bg: '#FFF8F1', card: '#FFFFFF', card2: '#F5F0EA', border: '#F0E8E0',
+    text: '#1A1A1A', muted: '#687780', sub: '#9CA3AF', nav: '#FFFFFF',
+    input: '#F5F0EA', promo: '#F0FFF4',
+  };
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+
   return (
-    <main style={{ minHeight: '100dvh', background: '#FFF8F1', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', margin: '0 auto' }}>
+    <div style={{ minHeight: '100dvh', background: D.bg, fontFamily: "'DM Sans', sans-serif", maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', transition: 'background 0.25s' }}>
 
-      {/* ── Hero Banner ───────────────────────────────────────────────────── */}
-      <div style={{ background: 'linear-gradient(160deg, #6B0F0F 0%, #891C1C 40%, #B22222 75%, #C0392B 100%)', padding: '0 0 32px', position: 'relative', overflow: 'hidden' }}>
-
-        {/* Decorative circles */}
-        <div style={{ position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: '50%', background: 'rgba(255,199,44,0.08)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', bottom: -40, left: -40, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', top: 80, left: -30, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,199,44,0.06)', pointerEvents: 'none' }} />
-
-        {/* Status bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: '5px 12px' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80', display: 'inline-block', boxShadow: '0 0 6px #4ade80' }} />
-            <span style={{ color: '#fff', fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>OPEN NOW</span>
+      {/* ── Header ── */}
+      <div style={{ padding: '52px 20px 16px', background: D.bg }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#E1251B', letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 4px' }}>{greeting}</p>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: D.text, margin: '0 0 4px', fontFamily: 'Georgia, serif' }}>
+              {restName} <span style={{ fontSize: 22 }}>👋</span>
+            </h1>
+            {tableNum !== '—' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                <MapPin size={12} color="#E1251B" />
+                <span style={{ fontSize: 12, color: D.muted }}>Table {tableNum} · {zone}</span>
+              </div>
+            )}
           </div>
-          {isQrScan && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 20, padding: '5px 12px' }}>
-              <span style={{ color: '#4ade80', fontSize: 11, fontWeight: 700 }}>✓ QR Verified</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={toggle}
+              style={{ width: 42, height: 42, borderRadius: 14, background: D.card, border: `1.5px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18 }}>
+              {isDark ? '☀️' : '🌙'}
+            </button>
+            <button onClick={() => router.push('/guest/tracking')}
+              style={{ width: 42, height: 42, borderRadius: 14, background: D.card, border: `1.5px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}>
+              <Bell size={18} color={D.muted} />
+            </button>
+            <button onClick={() => router.push('/guest/cart')} style={{ width: 42, height: 42, borderRadius: 14, background: '#E1251B', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', border: 'none' }}>
+              <ShoppingCart size={18} color="#fff" />
+              {cartCount > 0 && <span style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: '#FFC72C', color: '#891C1C', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cartCount}</span>}
+            </button>
+          </div>
+        </div>
+
+        {/* Search bar */}
+        <div style={{ position: 'relative', marginTop: 20 }}>
+          <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: D.sub }} />
+          <div onClick={() => router.push(menuUrl)}
+            style={{ height: 48, paddingLeft: 44, display: 'flex', alignItems: 'center', borderRadius: 16, background: D.input, border: `1.5px solid ${D.border}`, cursor: 'pointer' }}>
+            <span style={{ fontSize: 14, color: D.sub }}>Search food & drinks…</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Scrollable content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px' }}>
+
+        {/* Promo banner */}
+        <div style={{ borderRadius: 20, background: 'linear-gradient(135deg, #891C1C 0%, #B22222 60%, #C0392B 100%)', padding: '20px', marginBottom: 24, position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,199,44,0.15)' }} />
+          <div style={{ position: 'absolute', bottom: -15, right: 20, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#FFC72C', letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 6px' }}>Limited Time</p>
+          <p style={{ fontSize: 20, fontWeight: 900, color: '#fff', fontFamily: 'Georgia, serif', margin: '0 0 4px' }}>Special Today</p>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', margin: '0 0 14px' }}>Exclusive table experience</p>
+          <Link href={menuUrl} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FFC72C', color: '#891C1C', padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>
+            Order Now <ChevronRight size={14} />
+          </Link>
+        </div>
+
+        {/* Categories */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: D.text, margin: 0 }}>Categories</h2>
+            <Link href={menuUrl} style={{ fontSize: 12, color: '#E1251B', fontWeight: 700, textDecoration: 'none' }}>See all</Link>
+          </div>
+          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 4 }}>
+            {loading ? Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} style={{ flexShrink: 0, width: 72, height: 80, borderRadius: 16, background: D.card2 }} />
+            )) : cats.slice(0, 6).map((cat, i) => (
+              <Link key={cat} href={`${menuUrl}&cat=${cat.toLowerCase()}`}
+                style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 72, padding: '12px 8px', borderRadius: 16, background: i === 0 ? '#E1251B' : D.card, border: `1.5px solid ${i === 0 ? '#E1251B' : D.border}`, textDecoration: 'none', transition: 'all 0.2s' }}>
+                <span style={{ fontSize: 26 }}>{getCatEmoji(cat)}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: i === 0 ? '#fff' : D.text, textAlign: 'center', lineHeight: 1.2 }}>{cat}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Popular Now */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: D.text, margin: 0 }}>Popular Now 🔥</h2>
+            <Link href={menuUrl} style={{ fontSize: 12, color: '#E1251B', fontWeight: 700, textDecoration: 'none' }}>See all</Link>
+          </div>
+          {loading ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} style={{ height: 180, borderRadius: 20, background: D.card }} />
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {popular.map(item => (
+                <Link key={item.id} href={`/guest/menu/${item.id}`} style={{ textDecoration: 'none' }}>
+                  <div style={{ background: D.card, border: `1.5px solid ${D.border}`, borderRadius: 20, padding: 14, cursor: 'pointer', transition: 'all 0.2s' }}>
+                    <div style={{ width: '100%', aspectRatio: '1', borderRadius: 14, background: D.card2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44, marginBottom: 10, overflow: 'hidden' }}>
+                      {(item as any).imageUrl
+                        ? <img src={(item as any).imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 14 }} />
+                        : item.emoji}
+                    </div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: D.text, margin: '0 0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
+                    <p style={{ fontSize: 11, color: D.muted, margin: '0 0 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description?.slice(0, 30) || 'Restaurant special'}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: '#E1251B' }}>Rs. {item.price.toLocaleString()}</span>
+                      <button onClick={e => { e.preventDefault(); addItem({ menuItemId: item.id, name: item.name, emoji: item.emoji ?? '🍽️', price: item.price, quantity: 1, options: {} }); }}
+                        style={{ width: 28, height: 28, borderRadius: 8, background: '#E1251B', border: 'none', color: '#fff', fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>+</button>
+                    </div>
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Logo + Name */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '28px 20px 0', textAlign: 'center' }}>
-          {/* Logo circle */}
-          <div style={{ width: 96, height: 96, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48, marginBottom: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.25), 0 0 0 4px rgba(255,199,44,0.3)' }}>
-            🍽️
-          </div>
-          <h1 style={{ color: '#fff', fontSize: 32, fontWeight: 900, margin: '0 0 6px', fontFamily: 'Georgia, serif', textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>{restaurantName}</h1>
-          <p style={{ color: 'rgba(255,199,44,0.85)', fontSize: 14, fontStyle: 'italic', margin: '0 0 20px', fontWeight: 500 }}>{tagline}</p>
-
-          {/* Quick info pills */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: '5px 12px' }}>
-              <Star size={13} color="#FFC72C" fill="#FFC72C" />
-              <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>4.8</span>
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>(240+)</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: '5px 12px' }}>
-              <Clock size={13} color="rgba(255,255,255,0.7)" />
-              <span style={{ color: '#fff', fontSize: 12, fontWeight: 600 }}>15–25 min</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: '5px 12px' }}>
-              <Wifi size={13} color="rgba(255,255,255,0.7)" />
-              <span style={{ color: '#fff', fontSize: 12, fontWeight: 600 }}>DasPardes2024</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Table Card ────────────────────────────────────────────────────── */}
-      <div style={{ margin: '-20px 20px 0', background: '#fff', borderRadius: 20, padding: '18px 18px', boxShadow: '0 8px 32px rgba(137,28,28,0.12)', border: '1px solid #F0E8E0', position: 'relative', zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg, #FFF3E0, #FFE0B2)', border: '1.5px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <MapPin size={22} color="#E1251B" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ color: '#9CA3AF', fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 3px' }}>Your Table</p>
-            <p style={{ color: '#1A1A1A', fontSize: 20, fontWeight: 900, margin: '0 0 2px', fontFamily: 'Georgia, serif' }}>
-              {tableNum !== '—' ? `Table ${tableNum}` : 'Walk-in Guest'}
-            </p>
-            <p style={{ color: '#687780', fontSize: 12, margin: 0 }}>{zone}</p>
-          </div>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(34,197,94,0.3)' }}>
-            <span style={{ color: '#fff', fontSize: 16, fontWeight: 900 }}>✓</span>
-          </div>
-        </div>
-
-        {/* Session info */}
+        {/* QR Session info */}
         {isQrScan && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-            <div style={{ flex: 1, background: '#FFF8F1', border: '1px solid #F0E8E0', borderRadius: 12, padding: '10px 12px' }}>
-              <p style={{ color: '#9CA3AF', fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 3px' }}>Restaurant ID</p>
-              <p style={{ color: '#687780', fontSize: 11, fontFamily: 'monospace', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {qrRid ? `${qrRid.slice(0, 8)}…` : `${MENU_RID.slice(0, 8)}…`}
-              </p>
+          <div style={{ background: D.card, border: `1.5px solid ${D.border}`, borderRadius: 16, padding: '12px 16px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#F0FFF4', border: '1px solid #BBF7D0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: '#22c55e', fontSize: 16 }}>✓</span>
             </div>
-            <div style={{ flex: 1, background: '#FFF8F1', border: '1px solid #F0E8E0', borderRadius: 12, padding: '10px 12px' }}>
-              <p style={{ color: '#9CA3AF', fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', margin: '0 0 3px' }}>Table ID</p>
-              <p style={{ color: '#1A1A1A', fontSize: 13, fontWeight: 700, margin: 0 }}>{tid || '—'}</p>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#16a34a', margin: 0 }}>QR Verified · Secure Session</p>
+              <p style={{ fontSize: 11, color: D.muted, margin: 0 }}>Table {tableNum} · {zone}</p>
             </div>
           </div>
         )}
+        <div style={{ height: 80 }} />
       </div>
 
-      {/* ── Quick feature cards ───────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, padding: '24px 20px 0' }}>
+      {/* ── Bottom Nav ── */}
+      <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, background: D.nav, borderTop: `1px solid ${D.border}`, padding: '10px 0 24px', display: 'flex', justifyContent: 'space-around', zIndex: 100 }}>
         {[
-          { icon: '🍽️', label: 'Fresh Menu',    sub: 'Daily updated'   },
-          { icon: '⚡',  label: 'Fast Service',  sub: '15-25 minutes'  },
-          { icon: '💳',  label: 'Easy Pay',      sub: 'Pay at table'   },
-        ].map(f => (
-          <div key={f.label} style={{ background: '#fff', border: '1.5px solid #F0E8E0', borderRadius: 14, padding: '14px 10px', textAlign: 'center', boxShadow: '0 2px 8px rgba(137,28,28,0.04)' }}>
-            <span style={{ fontSize: 24, display: 'block', marginBottom: 6 }}>{f.icon}</span>
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#1A1A1A', margin: '0 0 2px' }}>{f.label}</p>
-            <p style={{ fontSize: 10, color: '#9CA3AF', margin: 0 }}>{f.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Main CTAs ─────────────────────────────────────────────────────── */}
-      <div style={{ padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Link href={menuUrl} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 62, borderRadius: 18, background: 'linear-gradient(135deg, #E1251B, #C41F16)', color: '#fff', textDecoration: 'none', padding: '0 20px', boxShadow: '0 8px 24px rgba(225,37,27,0.35)', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', right: -20, top: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ShoppingCart size={20} color="#fff" />
-            </div>
-            <div>
-              <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, margin: 0 }}>Browse Our Menu</p>
-              <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11, margin: 0 }}>View all dishes & order</p>
-            </div>
-          </div>
-          <ChevronRight size={20} color="rgba(255,255,255,0.7)" />
-        </Link>
-
-        <button style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 54, borderRadius: 16, background: '#fff', border: '1.5px solid #F0E8E0', padding: '0 20px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(137,28,28,0.05)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FFF3E0', border: '1px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Leaf size={17} color="#E1251B" />
-            </div>
-            <div style={{ textAlign: 'left' }}>
-              <p style={{ color: '#1A1A1A', fontSize: 14, fontWeight: 700, margin: 0 }}>Allergen Guide</p>
-              <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>Dietary information</p>
-            </div>
-          </div>
-          <ChevronRight size={18} color="#D1D5DB" />
-        </button>
-
-        <Link href="/guest/tracking" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 54, borderRadius: 16, background: '#fff', border: '1.5px solid #F0E8E0', padding: '0 20px', textDecoration: 'none', boxShadow: '0 2px 8px rgba(137,28,28,0.05)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FFF3E0', border: '1px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <UtensilsCrossed size={17} color="#E1251B" />
-            </div>
-            <div>
-              <p style={{ color: '#1A1A1A', fontSize: 14, fontWeight: 700, margin: 0 }}>Track My Order</p>
-              <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>Live kitchen status</p>
-            </div>
-          </div>
-          <ChevronRight size={18} color="#D1D5DB" />
-        </Link>
-      </div>
-
-      {/* ── Bottom nav ────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '12px 0 24px', borderTop: '1px solid #F0E8E0', background: '#fff', marginTop: 24 }}>
-        {[
-          { icon: '🏠', label: 'Home',   href: '/guest',          active: true  },
-          { icon: '📖', label: 'Menu',   href: menuUrl,                         },
-          { icon: '🛒', label: 'Cart',   href: '/guest/cart',                   },
-          { icon: '🕐', label: 'Orders', href: '/guest/tracking',               },
+          { icon: Home,    label: 'Home',    href: `/guest?rid=${qrRid}&tid=${tid}`, active: true },
+          { icon: Compass, label: 'Explore', href: menuUrl },
+          { icon: Heart,   label: 'Saved',   href: menuUrl },
+          { icon: User,    label: 'Profile',  href: '/guest' },
         ].map(n => (
-          <Link key={n.label} href={n.href} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '4px 12px', textDecoration: 'none', color: n.active ? '#E1251B' : '#9CA3AF' }}>
-            <span style={{ fontSize: 22 }}>{n.icon}</span>
-            <span style={{ fontSize: 10, fontWeight: 600 }}>{n.label}</span>
+          <Link key={n.label} href={n.href} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, textDecoration: 'none', color: n.active ? '#E1251B' : D.sub }}>
+            <n.icon size={22} color={n.active ? '#E1251B' : D.sub} />
+            <span style={{ fontSize: 10, fontWeight: n.active ? 700 : 500 }}>{n.label}</span>
           </Link>
         ))}
       </div>
-    </main>
+    </div>
   );
 }
 
 export default function GuestLandingPage() {
   return (
     <Suspense fallback={
-      <main style={{ minHeight: '100dvh', background: '#FFF8F1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-        <Loader2 size={28} color="#E1251B" />
-        <p style={{ color: '#687780', fontSize: 14 }}>Loading…</p>
-      </main>
+      <div style={{ minHeight: '100dvh', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={28} color="#E1251B" className="animate-spin" />
+      </div>
     }>
       <GuestContent />
     </Suspense>
