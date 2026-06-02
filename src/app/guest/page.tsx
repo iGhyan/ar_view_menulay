@@ -181,7 +181,7 @@ function GuestContent() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {popular.map(item => (
-                <Link key={item.id} href={`/guest/menu/${item.id}`} style={{ textDecoration: 'none' }}>
+                <Link key={item.id} href={`/guest/menu/${item.id}?rid=${qrRid || MENU_RID}&tid=${tid}`} style={{ textDecoration: 'none' }}>
                   <div style={{ background: D.card, border: `1.5px solid ${D.border}`, borderRadius: 20, padding: 14, cursor: 'pointer', transition: 'all 0.2s' }}>
                     <div style={{ width: '100%', aspectRatio: '1', borderRadius: 14, background: D.card2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44, marginBottom: 10, overflow: 'hidden' }}>
                       {(item as any).imageUrl

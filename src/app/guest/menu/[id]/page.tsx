@@ -33,6 +33,11 @@ export default function ItemDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+    // Also accept rid/tid from URL params (direct link from landing page)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlRid = urlParams.get('rid'); const urlTid = urlParams.get('tid');
+    if (urlRid) sessionStorage.setItem('lm_rid', urlRid);
+    if (urlTid) sessionStorage.setItem('lm_tid', urlTid);
     const hasSession = sessionStorage.getItem('lm_rid') || sessionStorage.getItem('lm_tid');
     if (!hasSession) { window.location.href = '/guest'; return; }
     const rid = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID || process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
@@ -55,7 +60,7 @@ export default function ItemDetailPage() {
       menuItemId: item.id, name: item.name, emoji: item.emoji ?? '🍽️',
       price: Math.round(item.price * SIZES[size].mult),
       quantity: qty,
-      options: { size: SIZES[size].label, extras: extras.join(', ') },
+      options: { doneness: SIZES[size].label, side: extras.join(', ') },
     });
     setAdded(true);
     setTimeout(() => { setAdded(false); router.push('/guest/cart'); }, 800);
