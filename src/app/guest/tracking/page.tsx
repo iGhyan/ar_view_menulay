@@ -40,6 +40,8 @@ export default function TrackingPage() {
   const [sessionTid,   setSessionTid]   = useState('');
   const [sessionTable, setSessionTable] = useState('');
   const [showCancel,   setShowCancel]   = useState(false);
+  const [cancelling,   setCancelling]   = useState(false);
+  const [cancelError,  setCancelError]  = useState('');
 
   useEffect(() => {
     const hasSession = sessionStorage.getItem('lm_rid') || sessionStorage.getItem('lm_tid');
@@ -83,6 +85,33 @@ export default function TrackingPage() {
   const currentStep   = latest ? getStepIndex(latest.status) : 0;
   const isCancelled   = ['TIMED_OUT','CANCELLED'].includes((latest?.status ?? '').toUpperCase());
 
+  const cancelOrder = async () => {
+    if (!latest) return;
+    setCancelling(true); setCancelError('');
+    try {
+      const apiId = (latest as any)._apiId ?? latest.orderId;
+      const res = await fetch(`/api/orders/${apiId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId:     process.env.NEXT_PUBLIC_TENANT_ID_KDS,
+          restaurantId: process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS,
+          orderId:      apiId,
+          cancelled:    true,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? `Error ${res.status}`);
+      }
+      setShowCancel(false);
+      router.push('/guest');
+    } catch (err: any) {
+      setCancelError(err?.message ?? 'Failed to cancel order');
+      setCancelling(false);
+    }
+  };
+
   const D = isDark ? {
     bg: '#111111', card: '#1C1C1C', card2: '#242424', border: 'rgba(255,255,255,0.08)',
     text: '#F5F0E8', muted: '#9CA3AF', sub: '#6B7280',
@@ -103,9 +132,21 @@ export default function TrackingPage() {
           <div style={{ width: '100%', maxWidth: 480, margin: '0 auto', background: D.card, borderRadius: '24px 24px 0 0', padding: '28px 24px 40px' }}>
             <h3 style={{ fontSize: 18, fontWeight: 800, color: D.text, margin: '0 0 8px', textAlign: 'center' }}>Cancel Order?</h3>
             <p style={{ fontSize: 13, color: D.muted, margin: '0 0 24px', textAlign: 'center' }}>This action cannot be undone. Please contact staff if needed.</p>
+            {cancelError && (
+              <p style={{ fontSize: 12, color: '#E1251B', textAlign: 'center', margin: '0 0 12px' }}>{cancelError}</p>
+            )}
             <div style={{ display: 'flex', gap: 12 }}>
-              <button onClick={() => setShowCancel(false)} style={{ flex: 1, height: 48, borderRadius: 24, background: D.card2, border: `1.5px solid ${D.border}`, color: D.muted, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Keep Order</button>
-              <button onClick={() => { setShowCancel(false); router.push('/guest'); }} style={{ flex: 1, height: 48, borderRadius: 24, background: '#E1251B', border: 'none', color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>Cancel Order</button>
+              <button onClick={() => { setShowCancel(false); setCancelError(''); }}
+                disabled={cancelling}
+                style={{ flex: 1, height: 48, borderRadius: 24, background: D.card2, border: `1.5px solid ${D.border}`, color: D.muted, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                Keep Order
+              </button>
+              <button onClick={cancelOrder} disabled={cancelling}
+                style={{ flex: 1, height: 48, borderRadius: 24, background: '#E1251B', border: 'none', color: '#fff', fontSize: 14, fontWeight: 800, cursor: cancelling ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: cancelling ? 0.7 : 1 }}>
+                {cancelling
+                  ? <><div style={{ width: 16, height: 16, border: '2.5px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> Cancelling…</>
+                  : 'Cancel Order'}
+              </button>
             </div>
           </div>
         </div>

@@ -43,6 +43,7 @@ function GuestContent() {
   const [items,     setItems]     = useState<ApiMenuItem[]>([]);
   const [loading,   setLoading]   = useState(true);
   const { itemCount, addItem } = useCartStore();
+  const [search, setSearch] = useState('');
   const cartCount = itemCount();
 
   useEffect(() => {
@@ -128,12 +129,66 @@ function GuestContent() {
 
         {/* Search bar */}
         <div style={{ position: 'relative', marginTop: 20 }}>
-          <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: D.sub }} />
-          <div onClick={() => router.push(menuUrl)}
-            style={{ height: 48, paddingLeft: 44, display: 'flex', alignItems: 'center', borderRadius: 16, background: D.input, border: `1.5px solid ${D.border}`, cursor: 'pointer' }}>
-            <span style={{ fontSize: 14, color: D.sub }}>Search food & drinks…</span>
-          </div>
+          <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: D.sub, pointerEvents: 'none', zIndex: 1 }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search food & drinks…"
+            style={{ width: '100%', height: 48, paddingLeft: 44, paddingRight: search ? 44 : 14, borderRadius: 16, background: D.input, border: `1.5px solid ${search ? '#E1251B' : D.border}`, fontSize: 14, color: D.text, outline: 'none', boxSizing: 'border-box', fontFamily: "'DM Sans', sans-serif", transition: 'border-color 0.2s' }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')}
+              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: D.card2, border: `1px solid ${D.border}`, borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, color: D.muted }}>
+              ✕
+            </button>
+          )}
         </div>
+
+        {/* Search results dropdown */}
+        {search.trim() && (
+          <div style={{ background: D.card, border: `1.5px solid ${D.border}`, borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', marginTop: 8 }}>
+            {items.filter(i =>
+              i.status !== 'inactive' &&
+              (i.name.toLowerCase().includes(search.toLowerCase()) ||
+               (i.description ?? '').toLowerCase().includes(search.toLowerCase()))
+            ).slice(0, 6).map((item, idx, arr) => (
+              <Link key={item.id} href={`/guest/menu/${item.id}?rid=${qrRid || MENU_RID}&tid=${tid}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', textDecoration: 'none', borderBottom: idx < arr.length - 1 ? `1px solid ${D.border}` : 'none', background: 'transparent' }}
+                onClick={() => setSearch('')}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: D.card2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0, overflow: 'hidden' }}>
+                  {(item as any).imageUrl
+                    ? <img src={(item as any).imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : item.emoji}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: D.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</p>
+                  <p style={{ fontSize: 12, color: D.muted, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description || 'Restaurant special'}</p>
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#E1251B', flexShrink: 0 }}>Rs. {item.price.toLocaleString()}</span>
+              </Link>
+            ))}
+            {items.filter(i =>
+              i.status !== 'inactive' &&
+              (i.name.toLowerCase().includes(search.toLowerCase()) ||
+               (i.description ?? '').toLowerCase().includes(search.toLowerCase()))
+            ).length === 0 && (
+              <div style={{ padding: '20px', textAlign: 'center' }}>
+                <p style={{ fontSize: 13, color: D.muted, margin: 0 }}>No items found for "{search}"</p>
+              </div>
+            )}
+            {items.filter(i =>
+              i.status !== 'inactive' &&
+              (i.name.toLowerCase().includes(search.toLowerCase()) ||
+               (i.description ?? '').toLowerCase().includes(search.toLowerCase()))
+            ).length > 6 && (
+              <Link href={`${menuUrl}&q=${encodeURIComponent(search)}`}
+                style={{ display: 'block', padding: '12px 16px', textAlign: 'center', fontSize: 13, fontWeight: 700, color: '#E1251B', textDecoration: 'none', borderTop: `1px solid ${D.border}` }}
+                onClick={() => setSearch('')}>
+                See all results →
+              </Link>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Scrollable content */}
